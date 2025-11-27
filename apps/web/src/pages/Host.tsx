@@ -56,22 +56,11 @@ export default function Host() {
           </div>
         </div>
 
-        <div className="bg-gray-800 rounded-lg p-6">
-          <h2 className="text-xl font-semibold text-white mb-4">
+        <div className="bg-gray-800 text-white rounded-lg p-6">
+          <h2 className="text-xl font-semibold mb-4">
             Phase: {state.value.toString()}
           </h2>
-
-          {state.matches("lobby") && (
-            <div>
-              <ul>
-                {Object.values(state.context.players).map((player) => (
-                  <li key={player.id} className="text-white mb-2">
-                    {player.name}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+          <pre>{JSON.stringify(state.context, null, 2)}</pre>
         </div>
       </div>
     </div>
