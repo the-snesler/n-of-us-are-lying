@@ -40,7 +40,7 @@ export default function Host() {
   useTimer(
     state.context.timer,
     () => send({ type: "TIMER_TICK" }),
-    () => send({ type: "TIMER_END" })
+    () => send({ type: "TIMER_END" }),
   );
 
   // Send state changes to players
@@ -77,9 +77,7 @@ export default function Host() {
       phase={state.value.toString()}
       timer={state.context.timer}
     >
-      {state.matches("lobby") && (
-        <LobbyPhase players={state.context.players} />
-      )}
+      {state.matches("lobby") && <LobbyPhase players={state.context.players} />}
       {state.matches("tutorial") && <TutorialPhase />}
       {state.matches("topicSelection") && (
         <TopicSelectionPhase
@@ -88,11 +86,36 @@ export default function Host() {
           researchRoundIndex={state.context.researchRoundIndex}
         />
       )}
-      {state.matches("writing") && <WritingPhase />}
-      {state.matches("guessing") && <GuessingPhase />}
-      {state.matches("presenting") && <PresentingPhase />}
-      {state.matches("voting") && <VotingPhase />}
-      {state.matches("reveal") && <RevealPhase />}
+      {state.matches("writing") && (
+        <WritingPhase
+          players={state.context.players}
+          selectedArticles={state.context.selectedArticles}
+          researchRoundIndex={state.context.researchRoundIndex}
+        />
+      )}
+      {state.matches("guessing") && (
+        <GuessingPhase
+          players={state.context.players}
+          currentRound={state.context.rounds[state.context.currentRoundIndex]}
+        />
+      )}
+      {state.matches("presenting") && (
+        <PresentingPhase
+          currentRound={state.context.rounds[state.context.currentRoundIndex]}
+        />
+      )}
+      {state.matches("voting") && (
+        <VotingPhase
+          players={state.context.players}
+          currentRound={state.context.rounds[state.context.currentRoundIndex]}
+        />
+      )}
+      {state.matches("reveal") && (
+        <RevealPhase
+          players={state.context.players}
+          currentRound={state.context.rounds[state.context.currentRoundIndex]}
+        />
+      )}
       {state.matches("leaderboard") && <LeaderboardPhase />}
     </HostLayout>
   );

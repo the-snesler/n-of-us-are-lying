@@ -1,16 +1,16 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 // Game phases
 export const GamePhaseSchema = z.enum([
-  'LOBBY',
-  'TUTORIAL',
-  'TOPIC_SELECTION',
-  'WRITING',
-  'GUESSING',
-  'PRESENTING',
-  'VOTING',
-  'REVEAL',
-  'LEADERBOARD',
+  "LOBBY",
+  "TUTORIAL",
+  "TOPIC_SELECTION",
+  "WRITING",
+  "GUESSING",
+  "PRESENTING",
+  "VOTING",
+  "REVEAL",
+  "LEADERBOARD",
 ]);
 
 export type GamePhase = z.infer<typeof GamePhaseSchema>;
@@ -43,9 +43,10 @@ export const RoundSchema = z.object({
   targetPlayerId: z.string(),
   article: ArticleSchema,
   lies: z.record(z.string(), z.string()), // playerId -> lie text
-  votes: z.record(z.string(), z.string()), // voterId -> answerId
+  votes: z.record(z.string(), z.string()), // voterId -> answerId (playerId)
   markedTrue: z.array(z.string()), // playerIds whose lies were marked as "also true"
   isEveryoneLies: z.boolean(),
+  shuffledAnswerIds: z.array(z.string()).optional(), // Shuffled list of playerIds (including expert)
 });
 
 export type Round = z.infer<typeof RoundSchema>;
@@ -89,25 +90,37 @@ export const PlayerViewStateSchema = z.object({
   roomCode: z.string(),
   phase: GamePhaseSchema,
   playerId: z.string(),
-  players: z.record(z.string(), PlayerSchema.pick({
-    id: true,
-    name: true,
-    score: true,
-    isVip: true,
-    isConnected: true,
-    avatarId: true,
-  })),
+  players: z.record(
+    z.string(),
+    PlayerSchema.pick({
+      id: true,
+      name: true,
+      score: true,
+      isVip: true,
+      isConnected: true,
+      avatarId: true,
+    }),
+  ),
   timer: z.number().nullable(),
 
   // Phase-specific data
   articleOptions: z.array(ArticleSchema).optional(),
   currentArticle: ArticleSchema.optional(),
-  answers: z.array(z.object({
-    id: z.string(),
-    text: z.string(),
-  })).optional(),
-  hasSubmitted: z.boolean().optional(),
+  articleTitle: z.string().optional(),
+  isExpert: z.boolean().optional(),
+  answers: z
+    .array(
+      z.object({
+        id: z.string(),
+        text: z.string(),
+      }),
+    )
+    .optional(),
+  hasSubmittedChoice: z.boolean().optional(),
+  hasSubmittedSummary: z.boolean().optional(),
+  hasSubmittedLie: z.boolean().optional(),
   hasVoted: z.boolean().optional(),
+  markedTrue: z.array(z.string()).optional(),
 });
 
 export type PlayerViewState = z.infer<typeof PlayerViewStateSchema>;

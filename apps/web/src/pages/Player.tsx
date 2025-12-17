@@ -1,18 +1,18 @@
-import { useParams } from 'react-router-dom';
-import { useState, useEffect } from 'react';
-import { useWebSocket } from '../hooks/useWebSocket';
-import type { PlayerViewState } from '@nofus/shared';
-import PlayerLayout from '../components/player/PlayerLayout';
-import LoadingState from '../components/shared/LoadingState';
-import LobbyPhase from '../components/player/phases/LobbyPhase';
-import TutorialPhase from '../components/player/phases/TutorialPhase';
-import TopicSelectionPhase from '../components/player/phases/TopicSelectionPhase';
-import WritingPhase from '../components/player/phases/WritingPhase';
-import GuessingPhase from '../components/player/phases/GuessingPhase';
-import PresentingPhase from '../components/player/phases/PresentingPhase';
-import VotingPhase from '../components/player/phases/VotingPhase';
-import RevealPhase from '../components/player/phases/RevealPhase';
-import LeaderboardPhase from '../components/player/phases/LeaderboardPhase';
+import { useParams } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useWebSocket } from "../hooks/useWebSocket";
+import type { PlayerViewState } from "@nofus/shared";
+import PlayerLayout from "../components/player/PlayerLayout";
+import LoadingState from "../components/shared/LoadingState";
+import LobbyPhase from "../components/player/phases/LobbyPhase";
+import TutorialPhase from "../components/player/phases/TutorialPhase";
+import TopicSelectionPhase from "../components/player/phases/TopicSelectionPhase";
+import WritingPhase from "../components/player/phases/WritingPhase";
+import GuessingPhase from "../components/player/phases/GuessingPhase";
+import PresentingPhase from "../components/player/phases/PresentingPhase";
+import VotingPhase from "../components/player/phases/VotingPhase";
+import RevealPhase from "../components/player/phases/RevealPhase";
+import LeaderboardPhase from "../components/player/phases/LeaderboardPhase";
 
 export default function Player() {
   const { code } = useParams<{ code: string }>();
@@ -49,7 +49,7 @@ export default function Player() {
 
   // Reset reroll state when phase changes to TOPIC_SELECTION
   useEffect(() => {
-    if (gameState?.phase === 'TOPIC_SELECTION') {
+    if (gameState?.phase === "TOPIC_SELECTION") {
       setHasRerolled(false);
     }
   }, [gameState?.phase]);
@@ -96,35 +96,88 @@ export default function Player() {
         <LoadingState message="Waiting for host..." />
       ) : (
         <>
-          {gameState.phase === 'LOBBY' && (
+          {gameState.phase === "LOBBY" && (
             <LobbyPhase
               players={gameState.players}
               playerId={gameState.playerId}
               onStartGame={handleStartGame}
             />
           )}
-          {gameState.phase === 'TUTORIAL' && (
+          {gameState.phase === "TUTORIAL" && (
             <TutorialPhase
               players={gameState.players}
               playerId={gameState.playerId}
               onContinue={handleContinue}
             />
           )}
-          {gameState.phase === 'TOPIC_SELECTION' && (
+          {gameState.phase === "TOPIC_SELECTION" && (
             <TopicSelectionPhase
               articleOptions={gameState.articleOptions || []}
-              hasSubmitted={gameState.hasSubmitted || false}
+              hasSubmitted={gameState.hasSubmittedChoice || false}
               hasRerolled={hasRerolled}
               onChooseArticle={handleChooseArticle}
               onReroll={handleReroll}
             />
           )}
-          {gameState.phase === 'WRITING' && <WritingPhase />}
-          {gameState.phase === 'GUESSING' && <GuessingPhase />}
-          {gameState.phase === 'PRESENTING' && <PresentingPhase />}
-          {gameState.phase === 'VOTING' && <VotingPhase />}
-          {gameState.phase === 'REVEAL' && <RevealPhase />}
-          {gameState.phase === 'LEADERBOARD' && <LeaderboardPhase />}
+          {gameState.phase === "WRITING" && (
+            <WritingPhase
+              currentArticle={gameState.currentArticle}
+              hasSubmitted={gameState.hasSubmittedSummary || false}
+              onSubmitSummary={(summary) =>
+                sendMessage({
+                  type: "SUBMIT_SUMMARY",
+                  target: "HOST",
+                  payload: { articleId: gameState.currentArticle?.id, summary },
+                })
+              }
+            />
+          )}
+          {gameState.phase === "GUESSING" && (
+            <GuessingPhase
+              articleTitle={gameState.articleTitle}
+              currentArticle={gameState.currentArticle}
+              isExpert={gameState.isExpert || false}
+              hasSubmitted={gameState.hasSubmittedLie || false}
+              onSubmitLie={(text) =>
+                sendMessage({
+                  type: "SUBMIT_LIE",
+                  target: "HOST",
+                  payload: { text },
+                })
+              }
+            />
+          )}
+          {gameState.phase === "PRESENTING" && (
+            <PresentingPhase
+              isExpert={gameState.isExpert || false}
+              currentArticle={gameState.currentArticle}
+            />
+          )}
+          {gameState.phase === "VOTING" && (
+            <VotingPhase
+              playerId={gameState.playerId}
+              isExpert={gameState.isExpert || false}
+              answers={gameState.answers || []}
+              hasVoted={gameState.hasVoted || false}
+              markedTrue={gameState.markedTrue}
+              onVote={(answerId) =>
+                sendMessage({
+                  type: "SUBMIT_VOTE",
+                  target: "HOST",
+                  payload: { answerId },
+                })
+              }
+              onMarkTrue={(playerId) =>
+                sendMessage({
+                  type: "MARK_TRUE",
+                  target: "HOST",
+                  payload: { playerId },
+                })
+              }
+            />
+          )}
+          {gameState.phase === "REVEAL" && <RevealPhase />}
+          {gameState.phase === "LEADERBOARD" && <LeaderboardPhase />}
         </>
       )}
     </PlayerLayout>

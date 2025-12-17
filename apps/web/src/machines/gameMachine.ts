@@ -24,6 +24,7 @@ interface GameContext {
   currentRoundIndex: number;
   rounds: Round[];
   currentPresentingPlayerId: string | null;
+  systemArticles: Article[]; // For "everyone lies" rounds
 }
 
 // Event types that the machine can receive
@@ -41,6 +42,7 @@ type GameEvent =
       summary: string;
     }
   | { type: "SUBMIT_LIE"; senderId: string; text: string }
+  | { type: "MARK_TRUE"; senderId: string; playerId: string }
   | { type: "SUBMIT_VOTE"; senderId: string; answerId: string }
   | { type: "TIMER_TICK" }
   | { type: "TIMER_END" }
@@ -53,16 +55,18 @@ export const gameMachine = setup({
     events: {} as GameEvent,
   },
   actors: {
-    fetchArticles: fromPromise(async ({ input }: { input: { playerId: string } }) => {
-      const articles = await fetchArticlesForPlayer(6);
-      return { playerId: input.playerId, articles };
-    }),
+    fetchArticles: fromPromise(
+      async ({ input }: { input: { playerId: string } }) => {
+        const articles = await fetchArticlesForPlayer(6);
+        return { playerId: input.playerId, articles };
+      },
+    ),
   },
   actions: {
     addPlayer: assign({
       players: ({ context, event }) => {
         if (event.type !== "PLAYER_CONNECTED") return context.players;
-        
+
         // reconnect, preserve existing properties
         const existingPlayer = context.players[event.playerId];
         if (existingPlayer) {
@@ -71,7 +75,7 @@ export const gameMachine = setup({
             [event.playerId]: { ...existingPlayer, isConnected: true },
           };
         }
-        
+
         // new player, create from scratch
         const isFirst = Object.keys(context.players).length === 0;
         const newPlayer: Player = {
@@ -100,12 +104,19 @@ export const gameMachine = setup({
 
     provideArticles: assign({
       articleOptions: ({ context, event }) => {
-        if (event.type !== "PROVIDE_ARTICLES") return context.articleOptions;
+        if (event.type !== "PROVIDE_ARTICLES" || event.playerId === "SYSTEM")
+          return context.articleOptions;
         return { ...context.articleOptions, [event.playerId]: event.articles };
       },
+      systemArticles: ({ context, event }) => {
+        if (event.type !== "PROVIDE_ARTICLES" || event.playerId !== "SYSTEM")
+          return context.systemArticles;
+        return [...context.systemArticles, ...event.articles];
+      },
       articleFetchStatus: ({ context, event }) => {
-        if (event.type !== "PROVIDE_ARTICLES") return context.articleFetchStatus;
-        return { ...context.articleFetchStatus, [event.playerId]: true };
+        if (event.type !== "PROVIDE_ARTICLES")
+          return context.articleFetchStatus;
+        return { ...context.articleFetchStatus, [event.playerId]: false };
       },
     }),
 
@@ -116,24 +127,28 @@ export const gameMachine = setup({
     }),
 
     fetchArticlesForPlayers: ({ context, self }) => {
+      // Fetch system articles for "everyone lies" rounds
+      if (context.systemArticles.length < 3) {
+        fetchArticlesForPlayer(3).then((articles) => {
+          self.send({ type: "PROVIDE_ARTICLES", playerId: "SYSTEM", articles });
+        });
+      }
+
       // Find players who need articles (not already fetched/fetching)
       const playersNeedingArticles = Object.keys(context.players).filter(
-        (playerId) => !context.articleOptions[playerId] && !context.articleFetchStatus[playerId]
+        (playerId) =>
+          !context.articleOptions[playerId] &&
+          !context.articleFetchStatus[playerId],
       );
 
       // Fetch articles for each player concurrently
       playersNeedingArticles.forEach((playerId) => {
-        // Mark as fetching immediately to prevent duplicate requests
-        context.articleFetchStatus[playerId] = true;
-
         fetchArticlesForPlayer(6)
           .then((articles) => {
             self.send({ type: "PROVIDE_ARTICLES", playerId, articles });
           })
           .catch((error) => {
             console.error(`Failed to fetch articles for ${playerId}:`, error);
-            // Reset status on error so it can be retried
-            delete context.articleFetchStatus[playerId];
           });
       });
     },
@@ -175,7 +190,7 @@ export const gameMachine = setup({
         const updatedArticles = playerArticles.map((article) =>
           article.id === event.articleId
             ? { ...article, summary: event.summary }
-            : article
+            : article,
         );
         return { ...context.selectedArticles, [playerId]: updatedArticles };
       },
@@ -192,7 +207,51 @@ export const gameMachine = setup({
           lies: { ...currentRound.lies, [event.senderId]: event.text },
         };
         return context.rounds.map((r, i) =>
-          i === context.currentRoundIndex ? updatedRound : r
+          i === context.currentRoundIndex ? updatedRound : r,
+        );
+      },
+    }),
+
+    markTrue: assign({
+      rounds: ({ context, event }) => {
+        if (event.type !== "MARK_TRUE") return context.rounds;
+        const currentRound = context.rounds[context.currentRoundIndex];
+        if (!currentRound) return context.rounds;
+
+        const updatedRound: Round = {
+          ...currentRound,
+          markedTrue: [
+            ...new Set([...currentRound.markedTrue, event.playerId]),
+          ],
+        };
+        return context.rounds.map((r, i) =>
+          i === context.currentRoundIndex ? updatedRound : r,
+        );
+      },
+    }),
+
+    shuffleAnswers: assign({
+      rounds: ({ context }) => {
+        const currentRound = context.rounds[context.currentRoundIndex];
+        if (!currentRound) return context.rounds;
+
+        const answerIds = [
+          currentRound.targetPlayerId,
+          ...Object.keys(currentRound.lies),
+        ];
+
+        // Shuffle answerIds
+        for (let i = answerIds.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [answerIds[i], answerIds[j]] = [answerIds[j], answerIds[i]];
+        }
+
+        const updatedRound: Round = {
+          ...currentRound,
+          shuffledAnswerIds: answerIds,
+        };
+        return context.rounds.map((r, i) =>
+          i === context.currentRoundIndex ? updatedRound : r,
         );
       },
     }),
@@ -208,7 +267,7 @@ export const gameMachine = setup({
           votes: { ...currentRound.votes, [event.senderId]: event.answerId },
         };
         return context.rounds.map((r, i) =>
-          i === context.currentRoundIndex ? updatedRound : r
+          i === context.currentRoundIndex ? updatedRound : r,
         );
       },
     }),
@@ -219,12 +278,16 @@ export const gameMachine = setup({
         if (!currentRound) return context.players;
 
         const updatedPlayers = { ...context.players };
-        const correctAnswerId = currentRound.targetPlayerId;
+        const expertId = currentRound.targetPlayerId;
 
         // Process each vote
         for (const [voterId, answerId] of Object.entries(currentRound.votes)) {
-          // Check if voter chose the correct answer (the truth-teller's ID)
-          if (answerId === correctAnswerId) {
+          // Check if voter chose the correct answer (the expert's ID)
+          // OR if they chose a lie that was marked as true
+          const isCorrect =
+            answerId === expertId || currentRound.markedTrue.includes(answerId);
+
+          if (isCorrect) {
             // Voter gets points for correct vote
             const voter = updatedPlayers[voterId];
             if (voter) {
@@ -234,9 +297,9 @@ export const gameMachine = setup({
               };
             }
           } else {
-            // The person whose lie was voted for gets points (if it's a lie, not marked true)
+            // The person whose lie was voted for gets points
             const liar = updatedPlayers[answerId];
-            if (liar && !currentRound.markedTrue.includes(answerId)) {
+            if (liar) {
               updatedPlayers[answerId] = {
                 ...liar,
                 score: liar.score + POINTS_FOR_FOOLING,
@@ -252,6 +315,7 @@ export const gameMachine = setup({
     incrementResearchRound: assign({
       researchRoundIndex: ({ context }) => context.researchRoundIndex + 1,
       hasRerolled: () => ({}), // Reset reroll tracking for new research round
+      articleFetchStatus: () => ({}),
     }),
 
     setupRounds: assign({
@@ -280,7 +344,23 @@ export const gameMachine = setup({
           [rounds[i], rounds[j]] = [rounds[j], rounds[i]];
         }
 
-        return rounds;
+        // Apply "everyone lies" chance
+        let systemArticleIdx = 0;
+        return rounds.map((round) => {
+          if (
+            Math.random() < (context.config.everyoneLiesChance || 0) &&
+            systemArticleIdx < context.systemArticles.length
+          ) {
+            const systemArticle = context.systemArticles[systemArticleIdx++];
+            return {
+              ...round,
+              article: systemArticle,
+              isEveryoneLies: true,
+              targetPlayerId: "NONE", // No expert
+            };
+          }
+          return round;
+        });
       },
       currentRoundIndex: () => 0,
       currentPresentingPlayerId: ({ context }) => {
@@ -329,7 +409,7 @@ export const gameMachine = setup({
   guards: {
     enoughPlayers: ({ context }) => {
       const connectedPlayers = Object.values(context.players).filter(
-        (p) => p.isConnected
+        (p) => p.isConnected,
       );
       return connectedPlayers.length >= 3;
     },
@@ -357,7 +437,7 @@ export const gameMachine = setup({
 
     allPlayersChoseArticle: ({ context }) => {
       const connectedPlayers = Object.values(context.players).filter(
-        (p) => p.isConnected
+        (p) => p.isConnected,
       );
 
       return connectedPlayers.every((player) => {
@@ -370,7 +450,7 @@ export const gameMachine = setup({
 
     allPlayersSubmittedSummary: ({ context }) => {
       const connectedPlayers = Object.values(context.players).filter(
-        (p) => p.isConnected
+        (p) => p.isConnected,
       );
       const expectedCount = context.researchRoundIndex + 1; // Round 0 needs 1 summary, round 1 needs 2, etc.
 
@@ -386,16 +466,16 @@ export const gameMachine = setup({
       if (!currentRound) return false;
 
       const connectedPlayers = Object.values(context.players).filter(
-        (p) => p.isConnected
+        (p) => p.isConnected,
       );
 
       // All players except the truth-teller should submit a lie
       const playersWhoShouldLie = connectedPlayers.filter(
-        (p) => p.id !== currentRound.targetPlayerId
+        (p) => p.id !== currentRound.targetPlayerId,
       );
 
       return playersWhoShouldLie.every(
-        (player) => currentRound.lies[player.id] !== undefined
+        (player) => currentRound.lies[player.id] !== undefined,
       );
     },
 
@@ -404,16 +484,16 @@ export const gameMachine = setup({
       if (!currentRound) return false;
 
       const connectedPlayers = Object.values(context.players).filter(
-        (p) => p.isConnected
+        (p) => p.isConnected,
       );
 
       // All players except the truth-teller should vote
       const playersWhoShouldVote = connectedPlayers.filter(
-        (p) => p.id !== currentRound.targetPlayerId
+        (p) => p.id !== currentRound.targetPlayerId,
       );
 
       return playersWhoShouldVote.every(
-        (player) => currentRound.votes[player.id] !== undefined
+        (player) => currentRound.votes[player.id] !== undefined,
       );
     },
   },
@@ -427,7 +507,7 @@ export const gameMachine = setup({
       maxPlayers: 8,
       articlesPerPlayer: 3,
       articleSelectionTimeSeconds: 60,
-      researchTimeSeconds: 180,
+      researchTimeSeconds: 240,
       lieTimeSeconds: 60,
       presentationTimeSeconds: 120,
       voteTimeSeconds: 30,
@@ -442,6 +522,7 @@ export const gameMachine = setup({
     currentRoundIndex: 0,
     rounds: [],
     currentPresentingPlayerId: null,
+    systemArticles: [],
   },
   states: {
     lobby: {
@@ -534,11 +615,15 @@ export const gameMachine = setup({
         TIMER_TICK: {
           actions: "tickTimer",
         },
-        TIMER_END: "presenting",
+        TIMER_END: {
+          target: "presenting",
+          actions: "shuffleAnswers",
+        },
       },
       always: {
         target: "presenting",
         guard: "allPlayersSubmittedLie",
+        actions: "shuffleAnswers",
       },
     },
 
@@ -555,6 +640,9 @@ export const gameMachine = setup({
     voting: {
       entry: "setVoteTimer",
       on: {
+        MARK_TRUE: {
+          actions: "markTrue",
+        },
         SUBMIT_VOTE: {
           actions: "submitVote",
         },
