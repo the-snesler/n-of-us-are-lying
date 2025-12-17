@@ -1,9 +1,24 @@
-import { PlayerViewState } from "@nofus/shared";
-import { MachineSnapshot } from "xstate";
+import { PlayerViewState, GamePhase } from "@nofus/shared";
 import { gameMachine } from "../machines/gameMachine";
 import { useMachine } from "@xstate/react";
 
 const API_BASE = "/api/v1";
+
+// Convert state machine state names (camelCase) to GamePhase enum (UPPERCASE_SNAKE_CASE)
+function stateToPhase(stateValue: string): GamePhase {
+  const mapping: Record<string, GamePhase> = {
+    lobby: "LOBBY",
+    tutorial: "TUTORIAL",
+    topicSelection: "TOPIC_SELECTION",
+    writing: "WRITING",
+    guessing: "GUESSING",
+    presenting: "PRESENTING",
+    voting: "VOTING",
+    reveal: "REVEAL",
+    leaderboard: "LEADERBOARD",
+  };
+  return mapping[stateValue] || "LOBBY";
+}
 
 export interface CreateRoomResponse {
   roomCode: string;
@@ -50,18 +65,21 @@ export function machineStateToPlayerViewState(
     state.matches("reveal");
   let response = {
     roomCode: state.context.roomCode,
-    phase: state.value.toString() as any,
+    phase: stateToPhase(state.value.toString()),
     playerId: playerId,
     timer: state.context.timer,
     players: state.context.players,
   };
   if (isFirstHalf) {
-    const currentRound = state.context.currentRoundIndex;
+    const playerArticles = state.context.selectedArticles[playerId] || [];
+    const expectedCount = state.context.researchRoundIndex + 1;
+    const hasSubmitted = playerArticles.length >= expectedCount;
+
     return {
       ...response,
       articleOptions: state.context.articleOptions[playerId] || [],
-      currentArticle:
-        state.context.selectedArticles[playerId][currentRound] || null,
+      currentArticle: playerArticles[state.context.researchRoundIndex] || null,
+      hasSubmitted,
     };
   }
   if (isSecondHalf) {

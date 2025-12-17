@@ -309,7 +309,8 @@ export const gameMachine = setup({
       );
 
       return connectedPlayers.every((player) => {
-        const selectedCount = (context.selectedArticles[player.id] || []).length;
+        const selectedCount = (context.selectedArticles[player.id] || [])
+          .length;
         const expectedCount = context.researchRoundIndex + 1; // Round 0 needs 1, round 1 needs 2, etc.
         return selectedCount >= expectedCount;
       });
@@ -323,7 +324,7 @@ export const gameMachine = setup({
 
       return connectedPlayers.every((player) => {
         const articles = context.selectedArticles[player.id] || [];
-        const summariesCount = articles.filter(a => a.summary).length;
+        const summariesCount = articles.filter((a) => a.summary).length;
         return summariesCount >= expectedCount;
       });
     },
@@ -373,6 +374,7 @@ export const gameMachine = setup({
     config: {
       maxPlayers: 8,
       articlesPerPlayer: 3,
+      articleSelectionTimeSeconds: 60,
       researchTimeSeconds: 180,
       lieTimeSeconds: 60,
       presentationTimeSeconds: 120,

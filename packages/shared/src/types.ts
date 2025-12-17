@@ -54,6 +54,7 @@ export type Round = z.infer<typeof RoundSchema>;
 export const RoomConfigSchema = z.object({
   maxPlayers: z.number().min(3).max(8).default(8),
   articlesPerPlayer: z.number().default(3),
+  articleSelectionTimeSeconds: z.number().default(60),
   researchTimeSeconds: z.number().default(180),
   lieTimeSeconds: z.number().default(60),
   presentationTimeSeconds: z.number().default(120),
