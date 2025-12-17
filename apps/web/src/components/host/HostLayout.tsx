@@ -1,6 +1,6 @@
 import RoomCode from "../shared/RoomCode";
 import ConnectionBadge from "../shared/ConnectionBadge";
-import PhaseHeader from "../shared/PhaseHeader";
+import Timer from "../shared/Timer";
 
 interface HostLayoutProps {
   roomCode: string;
@@ -13,21 +13,18 @@ interface HostLayoutProps {
 export default function HostLayout({
   roomCode,
   isConnected,
-  phase,
   timer,
   children
 }: HostLayoutProps) {
   return (
-    <div className="min-h-screen bg-gray-900 p-8">
+    <div className="min-h-screen bg-gray-900 p-8 relative">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <RoomCode code={roomCode} size="lg" />
+          {timer && <Timer seconds={timer} size="lg" />}
           <ConnectionBadge isConnected={isConnected} />
         </div>
-
-        {/* Phase Header with Timer */}
-        <PhaseHeader phase={phase} timer={timer} />
 
         {/* Phase Content */}
         {children}

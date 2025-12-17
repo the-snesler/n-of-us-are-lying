@@ -76,6 +76,14 @@ export default function Player() {
     });
   };
 
+  const handleContinue = () => {
+    sendMessage({
+      type: "NEXT_PHASE",
+      target: "HOST",
+      payload: {},
+    });
+  };
+
   return (
     <PlayerLayout
       roomCode={code!}
@@ -95,7 +103,13 @@ export default function Player() {
               onStartGame={handleStartGame}
             />
           )}
-          {gameState.phase === 'TUTORIAL' && <TutorialPhase />}
+          {gameState.phase === 'TUTORIAL' && (
+            <TutorialPhase
+              players={gameState.players}
+              playerId={gameState.playerId}
+              onContinue={handleContinue}
+            />
+          )}
           {gameState.phase === 'TOPIC_SELECTION' && (
             <TopicSelectionPhase
               articleOptions={gameState.articleOptions || []}

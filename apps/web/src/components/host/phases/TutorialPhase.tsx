@@ -1,9 +1,11 @@
 export default function TutorialPhase() {
   return (
-    <div className="bg-gray-800 text-white rounded-lg p-6">
-      <p className="text-gray-400 text-center">
-        Tutorial phase - coming soon
-      </p>
+    <div className="absolute bottom-0 left-0 right-0 top-16 flex items-center justify-center p-4">
+      <img
+        src="/tutorial.png"
+        alt="Game Tutorial - Research, Guess, Present, Vote"
+        className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+      />
     </div>
   );
 }

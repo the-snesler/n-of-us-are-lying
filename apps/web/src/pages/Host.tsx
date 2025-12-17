@@ -70,7 +70,7 @@ export default function Host() {
         });
       }
     }
-  }, [state, isConnected, sendMessage]);
+  }, [state, state.context.players, isConnected, sendMessage]);
 
   if (!hostToken) {
     return (
