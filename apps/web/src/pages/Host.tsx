@@ -55,6 +55,13 @@ export default function Host() {
     actor.start();
     actorRef.current = actor;
     setState(actor.getSnapshot());
+    console.log("Game actor initialized", actor.getSnapshot());
+    
+    // If recovering into topicSelection, re-trigger article fetching
+    // since async actions are lost on crash
+    if (snapshot && actor.getSnapshot().matches("topicSelection")) {
+      actor.send({ type: "REFETCH_ARTICLES" });
+    }
   }, []);
 
   // Send function that forwards to the actor
@@ -155,7 +162,7 @@ export default function Host() {
 
   // Send state changes to players
   useEffect(() => {
-    if (isConnected && hostToken && state && actorRef.current) {
+    if (isConnected && hostToken && state && actorRef.current && state.status !== "stopped") {
       // Get the persisted snapshot for proper serialization
       const persistedSnapshot = actorRef.current.getPersistedSnapshot();
 
@@ -236,6 +243,7 @@ export default function Host() {
           players={state.context.players}
           selectedArticles={state.context.selectedArticles}
           researchRoundIndex={state.context.researchRoundIndex}
+          totalRounds={state.context.config.articlesPerPlayer}
         />
       )}
       {state.matches("writing") && (
@@ -243,6 +251,7 @@ export default function Host() {
           players={state.context.players}
           selectedArticles={state.context.selectedArticles}
           researchRoundIndex={state.context.researchRoundIndex}
+          totalRounds={state.context.config.articlesPerPlayer}
         />
       )}
       {state.matches("guessing") && (

@@ -47,6 +47,7 @@ type GameEvent =
   | { type: "SUBMIT_LIE"; senderId: string; text: string }
   | { type: "MARK_TRUE"; senderId: string; playerId: string }
   | { type: "SUBMIT_VOTE"; senderId: string; answerId: string }
+  | { type: "REFETCH_ARTICLES" }
   | { type: "TIMER_TICK" }
   | { type: "TIMER_END" }
   | { type: "NEXT_PHASE" };
@@ -635,6 +636,9 @@ export const gameMachine = setup({
     topicSelection: {
       entry: ["setResearchTimer", "fetchArticlesForPlayers"],
       on: {
+        REFETCH_ARTICLES: {
+          actions: "fetchArticlesForPlayers",
+        },
         PROVIDE_ARTICLES: {
           actions: "provideArticles",
         },
