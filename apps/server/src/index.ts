@@ -3,17 +3,18 @@ import {
   getRoom,
   validateHostToken,
   type WebSocketData,
-} from './rooms';
+} from "./rooms";
 import {
   handleOpen,
   handleMessage,
   handleClose,
   handlePlayerJoin,
   handlePlayerReconnect,
-} from './websocket';
-import { MessageTypes } from '@nofus/shared';
+} from "./websocket";
+import { MessageTypes } from "@nofus/shared";
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
+const STATIC_DIR = process.env.STATIC_DIR; // Path to built frontend (e.g., /app/public)
 
 const server = Bun.serve<WebSocketData>({
   port: PORT,
@@ -51,7 +52,7 @@ const server = Bun.serve<WebSocketData>({
       if (!room) {
         return Response.json(
           { error: "Room not found" },
-          { status: 404, headers: corsHeaders }
+          { status: 404, headers: corsHeaders },
         );
       }
 
@@ -64,7 +65,7 @@ const server = Bun.serve<WebSocketData>({
         if (!token || !validateHostToken(roomCode, token)) {
           return Response.json(
             { error: "Invalid host token" },
-            { status: 401, headers: corsHeaders }
+            { status: 401, headers: corsHeaders },
           );
         }
 
@@ -75,7 +76,7 @@ const server = Bun.serve<WebSocketData>({
         if (!upgraded) {
           return Response.json(
             { error: "WebSocket upgrade failed" },
-            { status: 500, headers: corsHeaders }
+            { status: 500, headers: corsHeaders },
           );
         }
 
@@ -88,7 +89,7 @@ const server = Bun.serve<WebSocketData>({
         if (!result.success) {
           return Response.json(
             { error: result.error },
-            { status: 401, headers: corsHeaders }
+            { status: 401, headers: corsHeaders },
           );
         }
 
@@ -99,7 +100,7 @@ const server = Bun.serve<WebSocketData>({
         if (!upgraded) {
           return Response.json(
             { error: "WebSocket upgrade failed" },
-            { status: 500, headers: corsHeaders }
+            { status: 500, headers: corsHeaders },
           );
         }
 
@@ -112,7 +113,7 @@ const server = Bun.serve<WebSocketData>({
         if (!result.success) {
           return Response.json(
             { error: result.error },
-            { status: 400, headers: corsHeaders }
+            { status: 400, headers: corsHeaders },
           );
         }
 
@@ -123,7 +124,7 @@ const server = Bun.serve<WebSocketData>({
         if (!upgraded) {
           return Response.json(
             { error: "WebSocket upgrade failed" },
-            { status: 500, headers: corsHeaders }
+            { status: 500, headers: corsHeaders },
           );
         }
 
@@ -135,7 +136,7 @@ const server = Bun.serve<WebSocketData>({
 
       return Response.json(
         { error: "Invalid connection parameters" },
-        { status: 400, headers: corsHeaders }
+        { status: 400, headers: corsHeaders },
       );
     }
 
@@ -144,9 +145,32 @@ const server = Bun.serve<WebSocketData>({
       return Response.json({ status: "ok" }, { headers: corsHeaders });
     }
 
+    // Serve static files if STATIC_DIR is configured (production mode)
+    if (STATIC_DIR) {
+      try {
+        // Try to serve the requested file
+        const filePath = path === "/" ? "/index.html" : path;
+        const file = Bun.file(STATIC_DIR + filePath);
+
+        if (await file.exists()) {
+          return new Response(file);
+        }
+
+        // If file doesn't exist and it's not an API route, serve index.html (SPA fallback)
+        if (!path.startsWith("/api/")) {
+          const indexFile = Bun.file(STATIC_DIR + "/index.html");
+          if (await indexFile.exists()) {
+            return new Response(indexFile);
+          }
+        }
+      } catch (error) {
+        console.error("Error serving static file:", error);
+      }
+    }
+
     return Response.json(
       { error: "Not found" },
-      { status: 404, headers: corsHeaders }
+      { status: 404, headers: corsHeaders },
     );
   },
 
@@ -166,7 +190,7 @@ const server = Bun.serve<WebSocketData>({
                 playerId: player.id,
                 reconnectToken: player.reconnectToken,
               },
-            })
+            }),
           );
         }
       }
