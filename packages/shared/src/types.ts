@@ -56,11 +56,12 @@ export const RoomConfigSchema = z.object({
   maxPlayers: z.number().min(3).max(8).default(8),
   articlesPerPlayer: z.number().default(3),
   articleSelectionTimeSeconds: z.number().default(60),
-  researchTimeSeconds: z.number().default(180),
+  researchTimeSeconds: z.number().default(240),
   lieTimeSeconds: z.number().default(60),
-  presentationTimeSeconds: z.number().default(120),
+  presentationTimeSeconds: z.number().default(600),
   voteTimeSeconds: z.number().default(30),
-  everyoneLiesChance: z.number().min(0).max(1).default(0.15),
+  everyoneLiesChance: z.number().min(0).max(1).default(0.10),
+  playerAdditionalArticleChance: z.number().min(0).max(1).default(0.5),
 });
 
 export type RoomConfig = z.infer<typeof RoomConfigSchema>;
@@ -108,6 +109,7 @@ export const PlayerViewStateSchema = z.object({
   currentArticle: ArticleSchema.optional(),
   articleTitle: z.string().optional(),
   isExpert: z.boolean().optional(),
+  mySubmission: z.string().optional(),
   answers: z
     .array(
       z.object({

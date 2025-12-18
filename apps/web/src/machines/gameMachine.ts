@@ -228,9 +228,9 @@ export const gameMachine = setup({
         ).length;
         const submittedCount = Object.keys(currentRound.lies).length + 1; // +1 for the current submission
 
-        // Auto-submit expert summary 10 seconds after half of non-experts submit
+        // Auto-submit expert summary 2 seconds after half of non-experts submit
         if (submittedCount >= Math.ceil(liarsCount / 2)) {
-          return 10;
+          return 2;
         }
         return null;
       },
@@ -259,10 +259,10 @@ export const gameMachine = setup({
         const currentRound = context.rounds[context.currentRoundIndex];
         if (!currentRound) return context.rounds;
 
-        const answerIds = [
-          currentRound.targetPlayerId,
-          ...Object.keys(currentRound.lies),
-        ];
+        const answerIds = [...Object.keys(currentRound.lies)];
+        if (!currentRound.isEveryoneLies) {
+          answerIds.push(currentRound.targetPlayerId);
+        }
 
         // Shuffle answerIds
         for (let i = answerIds.length - 1; i > 0; i--) {
@@ -293,6 +293,28 @@ export const gameMachine = setup({
         return context.rounds.map((r, i) =>
           i === context.currentRoundIndex ? updatedRound : r,
         );
+      },
+      expertReadyTimer: ({ context, event }) => {
+        if (event.type !== "SUBMIT_VOTE") return context.expertReadyTimer;
+        if (context.expertReady || context.expertReadyTimer !== null)
+          return context.expertReadyTimer;
+
+        const currentRound = context.rounds[context.currentRoundIndex];
+        if (!currentRound) return null;
+
+        const connectedPlayers = Object.values(context.players).filter(
+          (p) => p.isConnected,
+        );
+        const votersCount = connectedPlayers.filter(
+          (p) => p.id !== currentRound.targetPlayerId,
+        ).length;
+        const submittedCount = Object.keys(currentRound.votes).length + 1;
+
+        // Auto-submit expert status 2 seconds after half of voters submit
+        if (submittedCount >= Math.ceil(votersCount / 2)) {
+          return 2;
+        }
+        return null;
       },
     }),
 
@@ -350,7 +372,9 @@ export const gameMachine = setup({
 
         for (const playerId of playerIds) {
           const articles = context.selectedArticles[playerId] || [];
-          for (const article of articles) {
+          for (let i = 0; i < articles.length; i++) {
+            if (i !== 0 && Math.random() > (context.config.playerAdditionalArticleChance || 0)) break
+            const article = articles[i];
             rounds.push({
               targetPlayerId: playerId,
               article,
@@ -405,6 +429,15 @@ export const gameMachine = setup({
         return currentRound?.isEveryoneLies || false;
       },
       expertReadyTimer: () => null,
+    }),
+
+    setupVoting: assign({
+      expertReady: ({ context }) => {
+        const currentRound = context.rounds[context.currentRoundIndex];
+        return currentRound?.isEveryoneLies || false;
+      },
+      expertReadyTimer: () => null,
+      timer: ({ context }) => context.config.voteTimeSeconds,
     }),
 
     nextRound: assign({
@@ -537,9 +570,11 @@ export const gameMachine = setup({
         (p) => p.id !== currentRound.targetPlayerId,
       );
 
-      return playersWhoShouldVote.every(
+      const allVotesSubmitted = playersWhoShouldVote.every(
         (player) => currentRound.votes[player.id] !== undefined,
       );
+
+      return allVotesSubmitted && context.expertReady;
     },
   },
 }).createMachine({
@@ -550,13 +585,14 @@ export const gameMachine = setup({
     players: {},
     config: {
       maxPlayers: 8,
-      articlesPerPlayer: 3,
+      articlesPerPlayer: 2,
       articleSelectionTimeSeconds: 60,
       researchTimeSeconds: 240,
       lieTimeSeconds: 60,
-      presentationTimeSeconds: 120,
+      presentationTimeSeconds: 600,
       voteTimeSeconds: 30,
-      everyoneLiesChance: 0.15,
+      everyoneLiesChance: 0.10,
+      playerAdditionalArticleChance: 0.5,
     },
     timer: null,
     researchRoundIndex: 0,
@@ -686,7 +722,7 @@ export const gameMachine = setup({
     },
 
     voting: {
-      entry: "setVoteTimer",
+      entry: "setupVoting",
       on: {
         MARK_TRUE: {
           actions: "markTrue",
