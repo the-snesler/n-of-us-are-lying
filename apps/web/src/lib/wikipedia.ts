@@ -96,17 +96,13 @@ async function fetchQualityArticle(): Promise<Article> {
  * Fetches multiple quality articles for a player
  */
 export async function fetchArticlesForPlayer(count: number): Promise<Article[]> {
-  const articles: Article[] = [];
-
-  for (let i = 0; i < count; i++) {
-    try {
-      const article = await fetchQualityArticle();
-      articles.push(article);
-    } catch (error) {
-      console.error(`Failed to fetch article ${i + 1}/${count}:`, error);
-      // Continue trying to fetch remaining articles even if one fails
-    }
-  }
+  const promises = Array.from({ length: count }, () => fetchQualityArticle());
+  
+  const results = await Promise.allSettled(promises);
+  
+  const articles = results
+    .filter((result): result is PromiseFulfilledResult<Article> => result.status === 'fulfilled')
+    .map(result => result.value);
 
   if (articles.length === 0) {
     throw new Error("Failed to fetch any articles");
