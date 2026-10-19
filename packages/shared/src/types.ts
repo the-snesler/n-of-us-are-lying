@@ -56,7 +56,7 @@ export const RoomConfigSchema = z.object({
   maxPlayers: z.number().min(3).max(8).default(8),
   articlesPerPlayer: z.number().default(3),
   articleSelectionTimeSeconds: z.number().default(60),
-  researchTimeSeconds: z.number().default(240),
+  researchTimeSeconds: z.number().default(360), // Total for all articles, self-paced
   lieTimeSeconds: z.number().default(60),
   presentationTimeSeconds: z.number().default(600),
   voteTimeSeconds: z.number().default(30),
@@ -117,6 +117,13 @@ export const PlayerViewStateSchema = z.object({
         text: z.string(),
       }),
     )
+    .optional(),
+  canReroll: z.boolean().optional(), // Next page of article options is loaded
+  researchProgress: z
+    .object({
+      completed: z.number(), // Summaries submitted
+      total: z.number(),
+    })
     .optional(),
   hasSubmittedChoice: z.boolean().optional(),
   hasSubmittedSummary: z.boolean().optional(),

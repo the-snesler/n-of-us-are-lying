@@ -26,9 +26,6 @@ export interface WebSocketData {
 // In-memory room storage
 const rooms = new Map<string, Room>();
 
-// Reconnection window in milliseconds (30 seconds)
-const RECONNECT_WINDOW_MS = 30_000;
-
 // Room expiry time (1 hour of inactivity)
 const ROOM_EXPIRY_MS = 60 * 60 * 1000;
 
@@ -102,16 +99,9 @@ export function reconnectPlayer(
   const player = room.players.get(playerId);
   if (!player) return false;
 
-  // Validate token
-  if (player.reconnectToken !== token) return false;
-
-  // Check if within reconnection window
-  if (player.disconnectedAt) {
-    const elapsed = Date.now() - player.disconnectedAt;
-    if (elapsed > RECONNECT_WINDOW_MS) return false;
-  }
-
-  return true;
+  // Validate token. No time limit: players routinely leave the page for
+  // minutes to read articles, and the room itself expires after inactivity.
+  return player.reconnectToken === token;
 }
 
 export function getPlayer(roomCode: string, playerId: string): PlayerConnection | undefined {
@@ -128,7 +118,7 @@ export function removePlayer(roomCode: string, playerId: string): void {
 
 export function setHostSocket(
   roomCode: string,
-  socket: ServerWebSocket<WebSocketData>
+  socket: ServerWebSocket<WebSocketData> | null
 ): void {
   const room = getRoom(roomCode);
   if (room) {
@@ -186,8 +176,9 @@ export function getPlayerSocket(
 export function cleanupExpiredRooms(): void {
   const now = Date.now();
   for (const [code, room] of rooms) {
-    // Remove rooms with no host connection after expiry time
-    if (!room.hostSocket && now - room.createdAt > ROOM_EXPIRY_MS) {
+    // Remove abandoned rooms (nobody connected) after expiry time
+    const anyPlayerConnected = Array.from(room.players.values()).some((p) => p.socket);
+    if (!room.hostSocket && !anyPlayerConnected && now - room.createdAt > ROOM_EXPIRY_MS) {
       rooms.delete(code);
     }
   }

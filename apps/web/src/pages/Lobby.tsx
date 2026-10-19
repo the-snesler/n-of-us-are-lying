@@ -1,13 +1,23 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { createRoom } from '../lib/api';
+import {
+  getLastRoom,
+  getPlayerSession,
+  setHostToken,
+  setPlayerSession,
+} from '../lib/session';
 import { ROOM_CODE_LENGTH } from "@nofus/shared";
 
 export default function Lobby() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const [lastRoom] = useState(() => getLastRoom());
   // inputs
-  const [roomCode, setRoomCode] = useState("");
-  const [playerName, setPlayerName] = useState("");
+  const [roomCode, setRoomCode] = useState(
+    () => (searchParams.get("code") || "").toUpperCase().slice(0, ROOM_CODE_LENGTH),
+  );
+  const [playerName, setPlayerName] = useState(() => searchParams.get("name") || "");
   // UI state
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -15,8 +25,13 @@ export default function Lobby() {
   const handleJoin = (e: React.FormEvent) => {
     e.preventDefault();
     if (roomCode.length === ROOM_CODE_LENGTH && playerName.trim()) {
-      sessionStorage.setItem(`player_name`, playerName);
-      navigate(`/play/${roomCode.toUpperCase()}`);
+      const code = roomCode.toUpperCase();
+      const existing = getPlayerSession(code);
+      // Keep the existing identity if rejoining the same room under the same name
+      if (!existing || existing.name !== playerName.trim()) {
+        setPlayerSession(code, { name: playerName.trim() });
+      }
+      navigate(`/play/${code}`);
     }
   };
 
@@ -26,7 +41,7 @@ export default function Lobby() {
     try {
       const { roomCode, hostToken } = await createRoom();
       // Store host token for WebSocket auth
-      sessionStorage.setItem(`host_token_${roomCode}`, hostToken);
+      setHostToken(roomCode, hostToken);
       navigate(`/host/${roomCode}`);
     } catch (err) {
       setError("Failed to create room");
@@ -41,6 +56,15 @@ export default function Lobby() {
         <h1 className="text-3xl font-bold text-white text-center mb-8">
           N Of Us Are Lying
         </h1>
+
+        {lastRoom && (
+          <button
+            onClick={() => navigate(`/play/${lastRoom.roomCode}`)}
+            className="w-full mb-6 px-4 py-3 bg-purple-600 cursor-pointer text-white rounded font-semibold hover:bg-purple-700"
+          >
+            Rejoin {lastRoom.roomCode} as {lastRoom.session.name}
+          </button>
+        )}
 
         <form onSubmit={handleJoin} className="mb-6">
           <div className="grid grid-cols-2 gap-4">

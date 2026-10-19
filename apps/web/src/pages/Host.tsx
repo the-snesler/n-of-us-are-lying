@@ -6,11 +6,11 @@ import { useWebSocket } from "../hooks/useWebSocket";
 import { useTimer } from "../hooks/useTimer";
 import { machineStateToPlayerViewState } from "../lib/api";
 import { encryptState, decryptState } from "@nofus/shared";
+import { getHostToken } from "../lib/session";
 import HostLayout from "../components/host/HostLayout";
 import LobbyPhase from "../components/host/phases/LobbyPhase";
 import TutorialPhase from "../components/host/phases/TutorialPhase";
-import TopicSelectionPhase from "../components/host/phases/TopicSelectionPhase";
-import WritingPhase from "../components/host/phases/WritingPhase";
+import ResearchPhase from "../components/host/phases/ResearchPhase";
 import GuessingPhase from "../components/host/phases/GuessingPhase";
 import PresentingPhase from "../components/host/phases/PresentingPhase";
 import VotingPhase from "../components/host/phases/VotingPhase";
@@ -29,7 +29,7 @@ type RecoveryState =
 
 export default function Host() {
   const { code } = useParams<{ code: string }>();
-  const hostToken = sessionStorage.getItem(`host_token_${code}`);
+  const [hostToken] = useState(() => getHostToken(code!));
 
   // Recovery state machine
   const [recoveryState, setRecoveryState] = useState<RecoveryState>({ status: "pending" });
@@ -57,9 +57,9 @@ export default function Host() {
     setState(actor.getSnapshot());
     console.log("Game actor initialized", actor.getSnapshot());
     
-    // If recovering into topicSelection, re-trigger article fetching
+    // If recovering into research, re-trigger article fetching
     // since async actions are lost on crash
-    if (snapshot && actor.getSnapshot().matches("topicSelection")) {
+    if (snapshot && actor.getSnapshot().matches("research")) {
       actor.send({ type: "REFETCH_ARTICLES" });
     }
   }, []);
@@ -71,9 +71,14 @@ export default function Host() {
     }
   }, []);
 
+  const getConnectionParams = useCallback(
+    () => (hostToken ? { token: hostToken } : null),
+    [hostToken],
+  );
+
   const { isConnected, sendMessage } = useWebSocket({
     roomCode: code!,
-    token: hostToken!,
+    getConnectionParams,
     onMessage: (message) => {
       if (message.type === "HOST_CONNECTED") {
         const players = (message.payload as { players: { id: string; name: string }[] }).players;
@@ -225,20 +230,11 @@ export default function Host() {
     >
       {state.matches("lobby") && <LobbyPhase players={state.context.players} />}
       {state.matches("tutorial") && <TutorialPhase />}
-      {state.matches("topicSelection") && (
-        <TopicSelectionPhase
+      {state.matches("research") && (
+        <ResearchPhase
           players={state.context.players}
           selectedArticles={state.context.selectedArticles}
-          researchRoundIndex={state.context.researchRoundIndex}
-          totalRounds={state.context.config.articlesPerPlayer}
-        />
-      )}
-      {state.matches("writing") && (
-        <WritingPhase
-          players={state.context.players}
-          selectedArticles={state.context.selectedArticles}
-          researchRoundIndex={state.context.researchRoundIndex}
-          totalRounds={state.context.config.articlesPerPlayer}
+          articlesPerPlayer={state.context.config.articlesPerPlayer}
         />
       )}
       {state.matches("guessing") && (

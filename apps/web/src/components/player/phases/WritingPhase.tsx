@@ -1,25 +1,39 @@
 import { useState } from "react";
 import type { Article } from "@nofus/shared";
 import SubmissionConfirm from "../components/SubmissionConfirm";
+import ResearchProgressHeader from "../components/ResearchProgressHeader";
+import { getDraft, setDraft } from "../../../lib/session";
 
 interface WritingPhaseProps {
+  roomCode: string;
   currentArticle?: Article;
   hasSubmitted: boolean;
+  progress?: { completed: number; total: number };
   onSubmitSummary: (summary: string) => void;
 }
 
 export default function WritingPhase({
+  roomCode,
   currentArticle,
   hasSubmitted,
+  progress,
   onSubmitSummary,
 }: WritingPhaseProps) {
-  const [summary, setSummary] = useState("");
+  // Drafts survive leaving the page to read the article
+  const [summary, setSummaryState] = useState(() =>
+    currentArticle ? getDraft(roomCode, currentArticle.id) : "",
+  );
   const MAX_CHARS = 50;
+
+  const setSummary = (text: string) => {
+    setSummaryState(text);
+    if (currentArticle) setDraft(roomCode, currentArticle.id, text);
+  };
 
   if (hasSubmitted) {
     return (
       <SubmissionConfirm
-        message="Summary submitted!"
+        message="All summaries submitted!"
         subtext="Waiting for other players..."
       />
     );
@@ -35,6 +49,7 @@ export default function WritingPhase({
 
   return (
     <div className="flex flex-col gap-4">
+      <ResearchProgressHeader progress={progress} />
       <h2 className="text-xl font-bold text-white text-center">
         {currentArticle.title}
       </h2>
@@ -75,7 +90,10 @@ export default function WritingPhase({
       </div>
 
       <button
-        onClick={() => onSubmitSummary(summary)}
+        onClick={() => {
+          onSubmitSummary(summary.trim());
+          setDraft(roomCode, currentArticle.id, "");
+        }}
         disabled={!summary.trim()}
         className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg transition-colors"
       >

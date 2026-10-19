@@ -42,6 +42,8 @@ export function handleOpen(ws: ServerWebSocket<WebSocketData>): void {
   } else if (role === 'player' && playerId) {
     const player = getPlayer(roomCode, playerId);
     if (player) {
+      // Newest connection wins; a half-dead socket from a backgrounded tab is
+      // ignored when it eventually closes (see handleClose)
       setPlayerSocket(roomCode, playerId, ws);
       console.log(`Player ${player.name} (${playerId}) connected to room ${roomCode}`);
 
@@ -122,12 +124,15 @@ export function handleClose(ws: ServerWebSocket<WebSocketData>): void {
   if (!room) return;
 
   if (role === 'host') {
+    // Ignore closes from sockets that have already been replaced
+    if (room.hostSocket !== ws) return;
     // Clear host socket but keep room alive for potential reconnection
-    setHostSocket(roomCode, null as unknown as ServerWebSocket<WebSocketData>);
+    setHostSocket(roomCode, null);
     console.log(`Host disconnected from room ${roomCode}`);
   } else if (role === 'player' && playerId) {
     const player = getPlayer(roomCode, playerId);
-    if (player) {
+    // Ignore closes from sockets that have already been replaced by a reconnect
+    if (player && player.socket === ws) {
       setPlayerSocket(roomCode, playerId, null);
       console.log(`Player ${player.name} (${playerId}) disconnected from room ${roomCode}`);
 

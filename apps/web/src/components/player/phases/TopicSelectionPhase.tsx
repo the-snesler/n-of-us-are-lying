@@ -2,41 +2,45 @@ import type { Article } from "@nofus/shared";
 import ArticleList from "../components/ArticleList";
 import RerollButton from "../components/RerollButton";
 import SubmissionConfirm from "../components/SubmissionConfirm";
+import CustomArticleForm from "../components/CustomArticleForm";
+import ResearchProgressHeader from "../components/ResearchProgressHeader";
 
 interface TopicSelectionPhaseProps {
   articleOptions: Article[];
   hasSubmitted: boolean;
-  hasRerolled: boolean;
+  canReroll: boolean;
+  progress?: { completed: number; total: number };
   onChooseArticle: (articleId: string) => void;
+  onChooseCustomArticle: (article: Article) => void;
   onReroll: () => void;
 }
 
 export default function TopicSelectionPhase({
   articleOptions,
   hasSubmitted,
-  hasRerolled,
+  canReroll,
+  progress,
   onChooseArticle,
+  onChooseCustomArticle,
   onReroll
 }: TopicSelectionPhaseProps) {
   if (hasSubmitted) {
     return (
       <SubmissionConfirm
         message="Article selected!"
-        subtext="Waiting for other players..."
+        subtext="Loading your article..."
       />
     );
   }
 
-  // Calculate which articles to show based on reroll status
-  const articlesToShow = articleOptions.slice(
-    hasRerolled ? 3 : 0,
-    hasRerolled ? 6 : 3
-  );
+  // The host only sends the current page of options
+  const articlesToShow = articleOptions;
 
   return (
     <>
+      <ResearchProgressHeader progress={progress} />
       <h2 className="text-lg font-semibold text-white mb-4">
-        Choose an Article
+        Choose {progress ? `Article ${progress.completed + 1}` : "an Article"}
       </h2>
 
       {articlesToShow.length === 0 ? (
@@ -52,9 +56,11 @@ export default function TopicSelectionPhase({
             />
           </div>
 
-          <RerollButton onReroll={onReroll} disabled={hasRerolled} />
+          <RerollButton onReroll={onReroll} disabled={!canReroll} />
         </>
       )}
+
+      <CustomArticleForm onChoose={onChooseCustomArticle} />
     </>
   );
 }

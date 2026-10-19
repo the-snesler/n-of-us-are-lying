@@ -1,6 +1,11 @@
 import { setup, assign, and, fromPromise } from "xstate";
 import type { Player, Article, Round, RoomConfig } from "@nofus/shared";
 import { fetchArticlesForPlayer } from "../lib/wikipedia";
+import { getResearchProgress } from "../lib/research";
+
+// Articles shown to a player at once, and how many to keep queued so rerolls are instant
+export const ARTICLES_PER_PAGE = 3;
+const ARTICLE_QUEUE_SIZE = ARTICLES_PER_PAGE * 2;
 
 // Scoring constants
 const POINTS_FOR_FOOLING = 700;
@@ -13,11 +18,9 @@ interface GameContext {
   config: RoomConfig;
   timer: number | null;
 
-  // Research phase
-  researchRoundIndex: number; // 0-2, tracks which of 3 research cycles
-  articleOptions: Record<string, Article[]>; // playerId -> 6 articles (first 3 shown, reroll shows next 3)
-  selectedArticles: Record<string, Article[]>; // playerId -> chosen articles (up to 3)
-  hasRerolled: Record<string, boolean>; // Track who has rerolled in current research round
+  // Research phase (self-paced: each player alternates choose -> write)
+  articleOptions: Record<string, Article[]>; // playerId -> queue of articles for their next pick (first 3 shown, reroll discards them)
+  selectedArticles: Record<string, Article[]>; // playerId -> chosen articles (up to config.articlesPerPlayer)
   articleFetchStatus: Record<string, boolean>; // Track which players have pending/completed fetches
 
   // Rounds
@@ -37,7 +40,9 @@ type GameEvent =
   | { type: "HOST_CONNECTED"; players: { id: string; name: string }[] }
   | { type: "PROVIDE_ARTICLES"; playerId: string; articles: Article[] }
   | { type: "REROLL_ARTICLES"; senderId: string }
+  | { type: "ARTICLE_FETCH_FAILED"; playerId: string }
   | { type: "CHOOSE_ARTICLE"; senderId: string; articleId: string }
+  | { type: "CHOOSE_CUSTOM_ARTICLE"; senderId: string; article: Article }
   | {
       type: "SUBMIT_SUMMARY";
       senderId: string;
@@ -110,7 +115,12 @@ export const gameMachine = setup({
       articleOptions: ({ context, event }) => {
         if (event.type !== "PROVIDE_ARTICLES" || event.playerId === "SYSTEM")
           return context.articleOptions;
-        return { ...context.articleOptions, [event.playerId]: event.articles };
+        // Append to the player's queue, skipping duplicates
+        const queue = [...(context.articleOptions[event.playerId] || [])];
+        for (const article of event.articles) {
+          if (!queue.some((a) => a.id === article.id)) queue.push(article);
+        }
+        return { ...context.articleOptions, [event.playerId]: queue };
       },
       systemArticles: ({ context, event }) => {
         if (event.type !== "PROVIDE_ARTICLES" || event.playerId !== "SYSTEM")
@@ -124,10 +134,17 @@ export const gameMachine = setup({
       },
     }),
 
-    markArticleFetching: assign({
-      articleFetchStatus: ({ context }, params: { playerId: string }) => {
-        return { ...context.articleFetchStatus, [params.playerId]: true };
+    markArticleFetchFailed: assign({
+      articleFetchStatus: ({ context, event }) => {
+        if (event.type !== "ARTICLE_FETCH_FAILED")
+          return context.articleFetchStatus;
+        return { ...context.articleFetchStatus, [event.playerId]: false };
       },
+    }),
+
+    // In-flight fetches are lost when the host recovers from a crash
+    resetFetchStatus: assign({
+      articleFetchStatus: () => ({}),
     }),
 
     fetchArticlesForPlayers: ({ context, self }) => {
@@ -138,38 +155,56 @@ export const gameMachine = setup({
         });
       }
 
-      // Find players who need articles (not already fetched/fetching)
+      // Find players who still have picks left and a short queue (not already fetching)
       const playersNeedingArticles = Object.keys(context.players).filter(
         (playerId) =>
-          !context.articleOptions[playerId] &&
+          (context.selectedArticles[playerId] || []).length <
+            context.config.articlesPerPlayer &&
+          (context.articleOptions[playerId]?.length ?? 0) < ARTICLE_QUEUE_SIZE &&
           !context.articleFetchStatus[playerId],
       );
 
-      // Fetch articles for each player concurrently
+      // Top up each player's queue concurrently
       playersNeedingArticles.forEach((playerId) => {
-        fetchArticlesForPlayer(6)
+        const missing =
+          ARTICLE_QUEUE_SIZE - (context.articleOptions[playerId]?.length ?? 0);
+        fetchArticlesForPlayer(missing)
           .then((articles) => {
             self.send({ type: "PROVIDE_ARTICLES", playerId, articles });
           })
           .catch((error) => {
             console.error(`Failed to fetch articles for ${playerId}:`, error);
+            self.send({ type: "ARTICLE_FETCH_FAILED", playerId });
           });
       });
     },
 
     rerollArticles: assign({
-      hasRerolled: ({ context, event }) => {
-        if (event.type !== "REROLL_ARTICLES") return context.hasRerolled;
-        return { ...context.hasRerolled, [event.senderId]: true };
+      articleOptions: ({ context, event }) => {
+        if (event.type !== "REROLL_ARTICLES") return context.articleOptions;
+        // Discard the currently shown articles, revealing the next ones in the queue
+        const options = context.articleOptions[event.senderId] || [];
+        return {
+          ...context.articleOptions,
+          [event.senderId]: options.slice(ARTICLES_PER_PAGE),
+        };
       },
     }),
 
     chooseArticle: assign({
       selectedArticles: ({ context, event }) => {
-        if (event.type !== "CHOOSE_ARTICLE") return context.selectedArticles;
+        if (
+          event.type !== "CHOOSE_ARTICLE" &&
+          event.type !== "CHOOSE_CUSTOM_ARTICLE"
+        )
+          return context.selectedArticles;
         const playerId = event.senderId;
-        const articles = context.articleOptions[playerId] || [];
-        const chosen = articles.find((a) => a.id === event.articleId);
+        const chosen =
+          event.type === "CHOOSE_CUSTOM_ARTICLE"
+            ? { ...event.article, summary: "" }
+            : (context.articleOptions[playerId] || []).find(
+                (a) => a.id === event.articleId,
+              );
         if (!chosen) return context.selectedArticles;
 
         const existing = context.selectedArticles[playerId] || [];
@@ -179,8 +214,12 @@ export const gameMachine = setup({
         };
       },
       articleOptions: ({ context, event }) => {
-        if (event.type !== "CHOOSE_ARTICLE") return context.articleOptions;
-        // Clear article options for this player after choosing
+        if (
+          event.type !== "CHOOSE_ARTICLE" &&
+          event.type !== "CHOOSE_CUSTOM_ARTICLE"
+        )
+          return context.articleOptions;
+        // Clear article options for this player after choosing so fresh ones are fetched for their next pick
         const { [event.senderId]: _, ...rest } = context.articleOptions;
         return rest;
       },
@@ -360,12 +399,6 @@ export const gameMachine = setup({
       },
     }),
 
-    incrementResearchRound: assign({
-      researchRoundIndex: ({ context }) => context.researchRoundIndex + 1,
-      hasRerolled: () => ({}), // Reset reroll tracking for new research round
-      articleFetchStatus: () => ({}),
-    }),
-
     setupRounds: assign({
       rounds: ({ context }) => {
         // Create one round per player per article they researched
@@ -373,7 +406,10 @@ export const gameMachine = setup({
         const playerIds = Object.keys(context.players);
 
         for (const playerId of playerIds) {
-          const articles = context.selectedArticles[playerId] || [];
+          // Players who ran out of time may have unsummarized articles
+          const articles = (context.selectedArticles[playerId] || []).filter(
+            (a) => a.summary,
+          );
           for (let i = 0; i < articles.length; i++) {
             if (i !== 0 && Math.random() > (context.config.playerAdditionalArticleChance || 0)) break
             const article = articles[i];
@@ -497,45 +533,57 @@ export const gameMachine = setup({
       return player?.isVip || false;
     },
 
-    hasMoreResearchRounds: ({ context }) => context.researchRoundIndex < context.config.articlesPerPlayer - 1,
-
-    researchComplete: ({ context }) => context.researchRoundIndex >= context.config.articlesPerPlayer - 1,
-
     hasMoreGuessingRounds: ({ context }) =>
       context.currentRoundIndex < context.rounds.length - 1,
 
     allRoundsComplete: ({ context }) =>
       context.currentRoundIndex >= context.rounds.length - 1,
 
+    noCurrentRound: ({ context }) =>
+      !context.rounds[context.currentRoundIndex],
+
     canReroll: ({ context, event }) => {
       if (event.type !== "REROLL_ARTICLES") return false;
-      return !context.hasRerolled[event.senderId];
+      // Only reroll once the next page of articles has loaded
+      return (
+        (context.articleOptions[event.senderId]?.length ?? 0) >
+        ARTICLES_PER_PAGE
+      );
     },
 
-    allPlayersChoseArticle: ({ context }) => {
+    senderIsChoosing: ({ context, event }) => {
+      if (
+        event.type !== "CHOOSE_ARTICLE" &&
+        event.type !== "CHOOSE_CUSTOM_ARTICLE"
+      )
+        return false;
+      const progress = getResearchProgress(
+        context.selectedArticles[event.senderId],
+        context.config.articlesPerPlayer,
+      );
+      if (progress.step !== "choosing") return false;
+      if (event.type === "CHOOSE_CUSTOM_ARTICLE") {
+        const { article } = event;
+        if (!article?.id || !article.title || !article.url) return false;
+        // Don't allow picking the same article twice
+        return !(context.selectedArticles[event.senderId] || []).some(
+          (a) => a.id === article.id,
+        );
+      }
+      return true;
+    },
+
+    allPlayersFinishedResearch: ({ context }) => {
       const connectedPlayers = Object.values(context.players).filter(
         (p) => p.isConnected,
       );
-
-      return connectedPlayers.every((player) => {
-        const selectedCount = (context.selectedArticles[player.id] || [])
-          .length;
-        const expectedCount = context.researchRoundIndex + 1; // Round 0 needs 1, round 1 needs 2, etc.
-        return selectedCount >= expectedCount;
-      });
-    },
-
-    allPlayersSubmittedSummary: ({ context }) => {
-      const connectedPlayers = Object.values(context.players).filter(
-        (p) => p.isConnected,
+      return connectedPlayers.every(
+        (player) =>
+          getResearchProgress(
+            context.selectedArticles[player.id],
+            context.config.articlesPerPlayer,
+          ).step === "done",
       );
-      const expectedCount = context.researchRoundIndex + 1; // Round 0 needs 1 summary, round 1 needs 2, etc.
-
-      return connectedPlayers.every((player) => {
-        const articles = context.selectedArticles[player.id] || [];
-        const summariesCount = articles.filter((a) => a.summary).length;
-        return summariesCount >= expectedCount;
-      });
     },
 
     allPlayersSubmittedLie: ({ context }) => {
@@ -587,9 +635,9 @@ export const gameMachine = setup({
     players: {},
     config: {
       maxPlayers: 8,
-      articlesPerPlayer: 2,
+      articlesPerPlayer: 3,
       articleSelectionTimeSeconds: 60,
-      researchTimeSeconds: 240,
+      researchTimeSeconds: 360, // Total time for all articles, players go at their own pace
       lieTimeSeconds: 60,
       presentationTimeSeconds: 600,
       voteTimeSeconds: 30,
@@ -597,10 +645,8 @@ export const gameMachine = setup({
       playerAdditionalArticleChance: 0.5,
     },
     timer: null,
-    researchRoundIndex: 0,
     articleOptions: {},
     selectedArticles: {},
-    hasRerolled: {},
     articleFetchStatus: {},
     currentRoundIndex: 0,
     rounds: [],
@@ -629,75 +675,73 @@ export const gameMachine = setup({
 
     tutorial: {
       on: {
-        NEXT_PHASE: "topicSelection",
+        NEXT_PHASE: "research",
       },
     },
 
-    topicSelection: {
+    research: {
       entry: ["setResearchTimer", "fetchArticlesForPlayers"],
       on: {
+        PLAYER_CONNECTED: {
+          actions: ["addPlayer", "fetchArticlesForPlayers"],
+        },
         REFETCH_ARTICLES: {
-          actions: "fetchArticlesForPlayers",
+          actions: ["resetFetchStatus", "fetchArticlesForPlayers"],
         },
         PROVIDE_ARTICLES: {
           actions: "provideArticles",
         },
+        ARTICLE_FETCH_FAILED: {
+          actions: "markArticleFetchFailed",
+        },
         REROLL_ARTICLES: {
           guard: "canReroll",
-          actions: "rerollArticles",
+          actions: ["rerollArticles", "fetchArticlesForPlayers"],
         },
         CHOOSE_ARTICLE: {
-          actions: "chooseArticle",
+          guard: "senderIsChoosing",
+          actions: ["chooseArticle", "fetchArticlesForPlayers"],
         },
-        TIMER_TICK: {
-          actions: "tickTimer",
+        CHOOSE_CUSTOM_ARTICLE: {
+          guard: "senderIsChoosing",
+          actions: ["chooseArticle", "fetchArticlesForPlayers"],
         },
-        TIMER_END: "writing",
-        NEXT_PHASE: "writing",
-      },
-      always: {
-        target: "writing",
-        guard: "allPlayersChoseArticle",
-      },
-    },
-
-    writing: {
-      on: {
         SUBMIT_SUMMARY: {
           actions: "submitSummary",
         },
         TIMER_TICK: {
           actions: "tickTimer",
         },
-        TIMER_END: [
-          {
-            target: "topicSelection",
-            guard: "hasMoreResearchRounds",
-            actions: "incrementResearchRound",
-          },
-          {
-            target: "guessing",
-            guard: "researchComplete",
-            actions: "setupRounds",
-          },
-        ],
-      },
-      always: [
-        {
-          target: "topicSelection",
-          guard: and(["allPlayersSubmittedSummary", "hasMoreResearchRounds"]),
-          actions: "incrementResearchRound",
-        },
-        {
+        TIMER_END: {
           target: "guessing",
-          guard: and(["allPlayersSubmittedSummary", "researchComplete"]),
           actions: "setupRounds",
         },
-      ],
+        NEXT_PHASE: {
+          target: "guessing",
+          actions: "setupRounds",
+        },
+      },
+      always: {
+        target: "guessing",
+        guard: "allPlayersFinishedResearch",
+        actions: "setupRounds",
+      },
     },
 
     guessing: {
       entry: ["setLieTimer", "setupCurrentRound"],
+      always: [
+        {
+          // Nobody finished a summary in time
+          target: "leaderboard",
+          guard: "noCurrentRound",
+        },
+        {
+          target: "presenting",
+          guard: "allPlayersSubmittedLie",
+          actions: "shuffleAnswers",
+        },
+      ],
       on: {
         SUBMIT_LIE: {
           actions: "submitLie",
@@ -709,11 +753,6 @@ export const gameMachine = setup({
           target: "presenting",
           actions: "shuffleAnswers",
         },
-      },
-      always: {
-        target: "presenting",
-        guard: "allPlayersSubmittedLie",
-        actions: "shuffleAnswers",
       },
     },
 

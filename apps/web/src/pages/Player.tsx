@@ -1,7 +1,12 @@
-import { useParams } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { Navigate, useNavigate, useParams } from "react-router-dom";
+import { useState, useCallback } from "react";
 import { useWebSocket } from "../hooks/useWebSocket";
-import type { PlayerViewState } from "@nofus/shared";
+import type { Article, PlayerViewState } from "@nofus/shared";
+import {
+  clearPlayerSession,
+  getPlayerSession,
+  updatePlayerSession,
+} from "../lib/session";
 import PlayerLayout from "../components/player/PlayerLayout";
 import LoadingState from "../components/shared/LoadingState";
 import LobbyPhase from "../components/player/phases/LobbyPhase";
@@ -16,30 +21,38 @@ import LeaderboardPhase from "../components/player/phases/LeaderboardPhase";
 
 export default function Player() {
   const { code } = useParams<{ code: string }>();
+  const navigate = useNavigate();
+  const roomCode = code!.toUpperCase();
 
   const [gameState, setGameState] = useState<PlayerViewState | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [hasRerolled, setHasRerolled] = useState(false);
   const [encryptedHostState, setEncryptedHostState] = useState<string | null>(null);
+  const [hasSession] = useState(() => !!getPlayerSession(roomCode));
 
-  // Check for existing session
-  const existingPlayerName = sessionStorage.getItem(`player_name`);
-  const existingPlayerId = sessionStorage.getItem(`player_id_${code}`);
-  const existingToken = sessionStorage.getItem(`player_token_${code}`);
+  // Read the stored session on every (re)connect: after the first join the
+  // server-issued id/token must be used so we reclaim the same player
+  const getConnectionParams = useCallback(() => {
+    const session = getPlayerSession(roomCode);
+    if (!session) return null;
+    const params: Record<string, string> = { name: session.name };
+    if (session.playerId && session.token) {
+      params.playerId = session.playerId;
+      params.token = session.token;
+    }
+    return params;
+  }, [roomCode]);
 
-  const { isConnected, sendMessage } = useWebSocket({
-    roomCode: code!,
-    playerName: existingPlayerName!,
-    playerId: existingPlayerId || undefined,
-    token: existingToken || undefined,
+  const { isConnected, failedAttempts, sendMessage } = useWebSocket({
+    roomCode,
+    getConnectionParams,
     onMessage: (message) => {
       const payload = message.payload as Record<string, unknown>;
       if (message.type === "ROOM_JOINED") {
-        sessionStorage.setItem(`player_id_${code}`, payload.playerId as string);
-        sessionStorage.setItem(
-          `player_token_${code}`,
-          payload.reconnectToken as string,
-        );
+        updatePlayerSession(roomCode, {
+          playerId: payload.playerId as string,
+          token: payload.reconnectToken as string,
+        });
+        setError(null);
       } else if (message.type === "SYNC_STATE") {
         const statePayload = payload as unknown as PlayerViewState & { encryptedHostState?: string };
         setGameState(statePayload);
@@ -63,17 +76,9 @@ export default function Player() {
     },
   });
 
-  // Reset reroll state when phase changes to TOPIC_SELECTION
-  useEffect(() => {
-    if (gameState?.phase === "TOPIC_SELECTION") {
-      setHasRerolled(false);
-    }
-  }, [gameState?.phase]);
-
   // Message handlers
   const handleReroll = () => {
     sendMessage({ type: "REROLL_ARTICLES", target: "HOST", payload: {} });
-    setHasRerolled(true);
   };
 
   const handleChooseArticle = (articleId: string) => {
@@ -83,6 +88,25 @@ export default function Player() {
       payload: { articleId },
     });
   };
+
+  const handleChooseCustomArticle = (article: Article) => {
+    sendMessage({
+      type: "CHOOSE_CUSTOM_ARTICLE",
+      target: "HOST",
+      payload: { article },
+    });
+  };
+
+  const handleRejoinAsNew = () => {
+    const session = getPlayerSession(roomCode);
+    clearPlayerSession(roomCode);
+    navigate(`/?code=${roomCode}${session ? `&name=${encodeURIComponent(session.name)}` : ""}`);
+  };
+
+  // No stored name for this room (e.g. opened the link directly), go pick one
+  if (!hasSession) {
+    return <Navigate to={`/?code=${roomCode}`} replace />;
+  }
 
   const handleStartGame = () => {
     sendMessage({
@@ -102,14 +126,28 @@ export default function Player() {
 
   return (
     <PlayerLayout
-      roomCode={code!}
+      roomCode={roomCode}
       isConnected={isConnected}
       phase={gameState?.phase}
       timer={gameState?.timer}
       error={error}
     >
       {!gameState ? (
-        <LoadingState message="Waiting for host..." />
+        failedAttempts >= 3 ? (
+          <div className="text-center">
+            <LoadingState message="Can't reconnect to this room. The game may have ended, or your session expired." />
+            <button
+              onClick={handleRejoinAsNew}
+              className="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg"
+            >
+              Back to Lobby
+            </button>
+          </div>
+        ) : (
+          <LoadingState
+            message={isConnected ? "Waiting for host..." : "Connecting..."}
+          />
+        )
       ) : (
         <>
           {gameState.phase === "LOBBY" && (
@@ -130,15 +168,20 @@ export default function Player() {
             <TopicSelectionPhase
               articleOptions={gameState.articleOptions || []}
               hasSubmitted={gameState.hasSubmittedChoice || false}
-              hasRerolled={hasRerolled}
+              canReroll={gameState.canReroll || false}
+              progress={gameState.researchProgress}
               onChooseArticle={handleChooseArticle}
+              onChooseCustomArticle={handleChooseCustomArticle}
               onReroll={handleReroll}
             />
           )}
           {gameState.phase === "WRITING" && (
             <WritingPhase
+              key={gameState.currentArticle?.id ?? "done"}
+              roomCode={roomCode}
               currentArticle={gameState.currentArticle}
               hasSubmitted={gameState.hasSubmittedSummary || false}
+              progress={gameState.researchProgress}
               onSubmitSummary={(summary) =>
                 sendMessage({
                   type: "SUBMIT_SUMMARY",

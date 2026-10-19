@@ -110,3 +110,77 @@ export async function fetchArticlesForPlayer(count: number): Promise<Article[]> 
 
   return articles;
 }
+
+/**
+ * Parses user input (a Wikipedia URL or a plain article title) into a
+ * language code and page title.
+ */
+function parseArticleInput(input: string): { lang: string; title: string } | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+
+  try {
+    const url = new URL(trimmed.includes("://") ? trimmed : `https://${trimmed}`);
+    const hostMatch = url.hostname.match(/^([a-z-]+)\.(?:m\.)?wikipedia\.org$/i);
+    if (hostMatch) {
+      const lang = hostMatch[1].toLowerCase() === "www" ? "en" : hostMatch[1].toLowerCase();
+      // /wiki/Title or /w/index.php?title=Title
+      const pathMatch = url.pathname.match(/^\/wiki\/(.+)$/);
+      const rawTitle = pathMatch?.[1] ?? url.searchParams.get("title");
+      if (!rawTitle) return null;
+      return { lang, title: decodeURIComponent(rawTitle).replace(/_/g, " ") };
+    }
+    if (trimmed.includes("://")) return null; // A URL, but not Wikipedia
+  } catch {
+    // Not a URL, treat as a title
+  }
+
+  return { lang: "en", title: trimmed };
+}
+
+/**
+ * Looks up a specific Wikipedia article from a URL or title entered by a player.
+ * Throws an Error with a user-facing message if the article can't be used.
+ */
+export async function fetchArticleFromInput(input: string): Promise<Article> {
+  const parsed = parseArticleInput(input);
+  if (!parsed) {
+    throw new Error("Enter a Wikipedia link or article title");
+  }
+
+  const apiBase =
+    parsed.lang === "en"
+      ? WIKIPEDIA_API_BASE
+      : `https://${parsed.lang}.wikipedia.org/api/rest_v1`;
+  const encodedTitle = encodeURIComponent(parsed.title.replace(/ /g, "_"));
+
+  let response: Response;
+  try {
+    response = await fetch(`${apiBase}/page/summary/${encodedTitle}`);
+  } catch {
+    throw new Error("Couldn't reach Wikipedia, try again");
+  }
+
+  if (response.status === 404) {
+    throw new Error(`No Wikipedia article found for "${parsed.title}"`);
+  }
+  if (!response.ok) {
+    throw new Error("Couldn't load that article, try again");
+  }
+
+  const data: WikipediaApiResponse = await response.json();
+  if (data.type === "disambiguation") {
+    throw new Error(`"${data.title}" is a disambiguation page, pick a more specific article`);
+  }
+  if (data.type !== "standard" || !data.pageid) {
+    throw new Error("That page isn't a regular Wikipedia article");
+  }
+
+  return {
+    id: parsed.lang === "en" ? data.pageid.toString() : `${parsed.lang}:${data.pageid}`,
+    title: data.title,
+    url: data.content_urls.desktop.page,
+    extract: data.extract,
+    summary: "",
+  };
+}

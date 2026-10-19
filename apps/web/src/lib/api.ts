@@ -1,6 +1,7 @@
 import { PlayerViewState, GamePhase } from "@nofus/shared";
-import { gameMachine } from "../machines/gameMachine";
+import { gameMachine, ARTICLES_PER_PAGE } from "../machines/gameMachine";
 import { useMachine } from "@xstate/react";
+import { getResearchProgress } from "./research";
 
 const API_BASE = "/api/v1";
 
@@ -9,8 +10,6 @@ function stateToPhase(stateValue: string): GamePhase {
   const mapping: Record<string, GamePhase> = {
     lobby: "LOBBY",
     tutorial: "TUTORIAL",
-    topicSelection: "TOPIC_SELECTION",
-    writing: "WRITING",
     guessing: "GUESSING",
     presenting: "PRESENTING",
     voting: "VOTING",
@@ -54,9 +53,6 @@ export function machineStateToPlayerViewState(
   state: ReturnType<typeof useMachine<typeof gameMachine>>[0],
   playerId: string,
 ): PlayerViewState {
-  // writing and selecting
-  const isFirstHalf =
-    state.matches("writing") || state.matches("topicSelection");
   // guessing, presenting, voting, reveal
   const isSecondHalf =
     state.matches("guessing") ||
@@ -70,19 +66,27 @@ export function machineStateToPlayerViewState(
     timer: state.context.timer,
     players: state.context.players,
   };
-  if (isFirstHalf) {
-    const playerArticles = state.context.selectedArticles[playerId] || [];
-    const currentArticle = playerArticles[state.context.researchRoundIndex];
-    const expectedCount = state.context.researchRoundIndex + 1;
-    const hasSubmittedChoice = playerArticles.length >= expectedCount;
-    const hasSubmittedSummary = !!(currentArticle && currentArticle.summary);
+  if (state.matches("research")) {
+    // Each player progresses at their own pace, so their phase is per-player
+    const progress = getResearchProgress(
+      state.context.selectedArticles[playerId],
+      state.context.config.articlesPerPlayer,
+    );
+
+    const options =
+      progress.step === "choosing"
+        ? state.context.articleOptions[playerId] || []
+        : [];
 
     return {
       ...response,
-      articleOptions: state.context.articleOptions[playerId] || [],
-      currentArticle: currentArticle,
-      hasSubmittedChoice,
-      hasSubmittedSummary,
+      phase: progress.step === "choosing" ? "TOPIC_SELECTION" : "WRITING",
+      articleOptions: options.slice(0, ARTICLES_PER_PAGE),
+      currentArticle: progress.currentArticle,
+      hasSubmittedChoice: progress.step !== "choosing",
+      hasSubmittedSummary: progress.step === "done",
+      canReroll: options.length > ARTICLES_PER_PAGE,
+      researchProgress: { completed: progress.completed, total: progress.total },
     };
   }
   if (isSecondHalf) {

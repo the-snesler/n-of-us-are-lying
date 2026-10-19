@@ -19,8 +19,7 @@ export function getPhaseName(phase: string): string {
   const phaseNames: Record<string, string> = {
     lobby: "Lobby",
     tutorial: "Tutorial",
-    topicSelection: "Topic Selection",
-    writing: "Writing Summaries",
+    research: "Research",
     guessing: "Guessing Round",
     presenting: "Presenting",
     voting: "Voting",

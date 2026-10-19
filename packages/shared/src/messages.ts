@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { PlayerViewStateSchema, RoomConfigSchema } from './types';
+import { ArticleSchema, PlayerViewStateSchema, RoomConfigSchema } from './types';
 import { ROOM_CODE_LENGTH } from ".";
 
 // Base message envelope
@@ -97,6 +97,12 @@ export const ChooseArticlePayloadSchema = z.object({
 
 export type ChooseArticlePayload = z.infer<typeof ChooseArticlePayloadSchema>;
 
+export const ChooseCustomArticlePayloadSchema = z.object({
+  article: ArticleSchema,
+});
+
+export type ChooseCustomArticlePayload = z.infer<typeof ChooseCustomArticlePayloadSchema>;
+
 export const SubmitSummaryPayloadSchema = z.object({
   articleId: z.string(),
   summary: z.string().min(1).max(500),
@@ -171,6 +177,7 @@ export const MessageTypes = {
   // Player -> Host (Relayed)
   START_GAME: 'START_GAME',
   CHOOSE_ARTICLE: 'CHOOSE_ARTICLE',
+  CHOOSE_CUSTOM_ARTICLE: 'CHOOSE_CUSTOM_ARTICLE',
   SUBMIT_SUMMARY: 'SUBMIT_SUMMARY',
   SUBMIT_LIE: 'SUBMIT_LIE',
   SUBMIT_VOTE: 'SUBMIT_VOTE',
