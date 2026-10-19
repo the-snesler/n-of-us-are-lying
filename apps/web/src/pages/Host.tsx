@@ -4,6 +4,7 @@ import { createActor, type SnapshotFrom, type Actor } from "xstate";
 import { gameMachine } from "../machines/gameMachine";
 import { useWebSocket } from "../hooks/useWebSocket";
 import { useTimer } from "../hooks/useTimer";
+import { useHostSounds } from "../hooks/useHostSounds";
 import { machineStateToPlayerViewState } from "../lib/api";
 import { encryptState, decryptState } from "@nofus/shared";
 import { getHostToken } from "../lib/session";
@@ -151,6 +152,8 @@ export default function Host() {
     () => send({ type: "TIMER_TICK" }),
     () => send({ type: "TIMER_END" }),
   );
+
+  useHostSounds(state);
 
   // Send state changes to players
   useEffect(() => {

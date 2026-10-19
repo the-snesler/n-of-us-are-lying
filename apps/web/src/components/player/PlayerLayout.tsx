@@ -1,6 +1,7 @@
 import RoomCode from "../shared/RoomCode";
 import ConnectionBadge from "../shared/ConnectionBadge";
 import ErrorMessage from "../shared/ErrorMessage";
+import SoundToggle from "../shared/SoundToggle";
 
 interface PlayerLayoutProps {
   roomCode: string;
@@ -23,7 +24,10 @@ export default function PlayerLayout({
         {/* Header */}
         <div className="flex justify-between items-center mb-4">
           <RoomCode code={roomCode} size="md" />
-          <ConnectionBadge isConnected={isConnected} size="sm" />
+          <div className="flex items-center gap-2">
+            <SoundToggle size="sm" />
+            <ConnectionBadge isConnected={isConnected} size="sm" />
+          </div>
         </div>
 
         {/* Error Display */}

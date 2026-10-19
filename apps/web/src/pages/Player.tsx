@@ -1,6 +1,8 @@
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { useState, useCallback } from "react";
 import { useWebSocket } from "../hooks/useWebSocket";
+import { usePlayerSounds } from "../hooks/usePlayerSounds";
+import { playSound } from "../lib/sound";
 import type { Article, PlayerViewState } from "@nofus/shared";
 import {
   clearPlayerSession,
@@ -76,12 +78,16 @@ export default function Player() {
     },
   });
 
+  usePlayerSounds(gameState);
+
   // Message handlers
   const handleReroll = () => {
+    playSound("tap");
     sendMessage({ type: "REROLL_ARTICLES", target: "HOST", payload: {} });
   };
 
   const handleChooseArticle = (articleId: string) => {
+    playSound("tap");
     sendMessage({
       type: "CHOOSE_ARTICLE",
       target: "HOST",
@@ -90,6 +96,7 @@ export default function Player() {
   };
 
   const handleChooseCustomArticle = (article: Article) => {
+    playSound("tap");
     sendMessage({
       type: "CHOOSE_CUSTOM_ARTICLE",
       target: "HOST",
@@ -109,6 +116,7 @@ export default function Player() {
   }
 
   const handleStartGame = () => {
+    playSound("tap");
     sendMessage({
       type: "START_GAME",
       target: "HOST",
@@ -117,6 +125,7 @@ export default function Player() {
   };
 
   const handleContinue = () => {
+    playSound("tap");
     sendMessage({
       type: "NEXT_PHASE",
       target: "HOST",
@@ -182,13 +191,14 @@ export default function Player() {
               currentArticle={gameState.currentArticle}
               hasSubmitted={gameState.hasSubmittedSummary || false}
               progress={gameState.researchProgress}
-              onSubmitSummary={(summary) =>
+              onSubmitSummary={(summary) => {
+                playSound("submit", 4);
                 sendMessage({
                   type: "SUBMIT_SUMMARY",
                   target: "HOST",
                   payload: { articleId: gameState.currentArticle?.id, summary },
-                })
-              }
+                });
+              }}
             />
           )}
           {gameState.phase === "GUESSING" && (
@@ -197,13 +207,14 @@ export default function Player() {
               currentArticle={gameState.currentArticle}
               isExpert={gameState.isExpert || false}
               hasSubmitted={gameState.hasSubmittedLie || false}
-              onSubmitLie={(text) =>
+              onSubmitLie={(text) => {
+                playSound("submit", 4);
                 sendMessage({
                   type: "SUBMIT_LIE",
                   target: "HOST",
                   payload: { text },
-                })
-              }
+                });
+              }}
             />
           )}
           {gameState.phase === "PRESENTING" && (
@@ -223,20 +234,22 @@ export default function Player() {
               answers={gameState.answers || []}
               hasVoted={gameState.hasVoted || false}
               markedTrue={gameState.markedTrue}
-              onVote={(answerId) =>
+              onVote={(answerId) => {
+                playSound("submit", 4);
                 sendMessage({
                   type: "SUBMIT_VOTE",
                   target: "HOST",
                   payload: { answerId },
-                })
-              }
-              onMarkTrue={(playerId) =>
+                });
+              }}
+              onMarkTrue={(playerId) => {
+                playSound("submit", 4);
                 sendMessage({
                   type: "MARK_TRUE",
                   target: "HOST",
                   payload: { playerId },
-                })
-              }
+                });
+              }}
             />
           )}
           {gameState.phase === "REVEAL" && (
