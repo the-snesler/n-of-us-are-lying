@@ -271,7 +271,13 @@ export default function Host() {
         />
       )}
       {state.matches("leaderboard") && (
-        <LeaderboardPhase players={state.context.players} />
+        <LeaderboardPhase
+          players={state.context.players}
+          playedRounds={state.context.rounds.slice(
+            0,
+            state.context.currentRoundIndex + 1,
+          )}
+        />
       )}
     </HostLayout>
   );
