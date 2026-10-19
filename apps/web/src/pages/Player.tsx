@@ -139,6 +139,7 @@ export default function Player() {
       isConnected={isConnected}
       phase={gameState?.phase}
       timer={gameState?.timer}
+      roundProgress={gameState?.roundProgress}
       error={error}
     >
       {!gameState ? (

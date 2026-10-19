@@ -5,9 +5,9 @@ import { gameMachine } from "../machines/gameMachine";
 import { useWebSocket } from "../hooks/useWebSocket";
 import { useTimer } from "../hooks/useTimer";
 import { useHostSounds } from "../hooks/useHostSounds";
-import { machineStateToPlayerViewState } from "../lib/api";
+import { getRoundProgress, machineStateToPlayerViewState } from "../lib/api";
 import { encryptState, decryptState } from "@nofus/shared";
-import { getHostToken } from "../lib/session";
+import { getHostGameLength, getHostToken } from "../lib/session";
 import HostLayout from "../components/host/HostLayout";
 import LobbyPhase from "../components/host/phases/LobbyPhase";
 import TutorialPhase from "../components/host/phases/TutorialPhase";
@@ -31,6 +31,7 @@ type RecoveryState =
 export default function Host() {
   const { code } = useParams<{ code: string }>();
   const [hostToken] = useState(() => getHostToken(code!));
+  const [gameLength] = useState(() => getHostGameLength(code!) ?? undefined);
 
   // Recovery state machine
   const [recoveryState, setRecoveryState] = useState<RecoveryState>({ status: "pending" });
@@ -45,8 +46,10 @@ export default function Host() {
     if (actorRef.current) {
       actorRef.current.stop();
     }
+    // Recovered snapshots already carry their config, so input only applies to fresh games
     const actor = createActor(gameMachine, {
       snapshot,
+      input: { gameLength },
     });
 
     actor.subscribe((newState) => {
@@ -63,7 +66,7 @@ export default function Host() {
     if (snapshot && actor.getSnapshot().matches("research")) {
       actor.send({ type: "REFETCH_ARTICLES" });
     }
-  }, []);
+  }, [gameLength]);
 
   // Send function that forwards to the actor
   const send = useCallback((event: Parameters<GameActor["send"]>[0]) => {
@@ -230,6 +233,7 @@ export default function Host() {
       isConnected={isConnected}
       phase={state.value.toString()}
       timer={state.context.timer}
+      roundProgress={getRoundProgress(state)}
     >
       {state.matches("lobby") && <LobbyPhase players={state.context.players} />}
       {state.matches("tutorial") && <TutorialPhase />}

@@ -4,10 +4,17 @@ import { createRoom } from '../lib/api';
 import {
   getLastRoom,
   getPlayerSession,
+  setHostGameLength,
   setHostToken,
   setPlayerSession,
 } from '../lib/session';
 import { ROOM_CODE_LENGTH } from "@nofus/shared";
+import { DEFAULT_GAME_LENGTH, type GameLength } from "../machines/gameMachine";
+
+const GAME_LENGTH_OPTIONS: { value: GameLength; label: string; description: string }[] = [
+  { value: "short", label: "Short", description: "Everyone's the expert once or twice" },
+  { value: "long", label: "Long", description: "Everyone's the expert two or three times" },
+];
 
 export default function Lobby() {
   const navigate = useNavigate();
@@ -18,6 +25,7 @@ export default function Lobby() {
     () => (searchParams.get("code") || "").toUpperCase().slice(0, ROOM_CODE_LENGTH),
   );
   const [playerName, setPlayerName] = useState(() => searchParams.get("name") || "");
+  const [gameLength, setGameLength] = useState<GameLength>(DEFAULT_GAME_LENGTH);
   // UI state
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,6 +50,7 @@ export default function Lobby() {
       const { roomCode, hostToken } = await createRoom();
       // Store host token for WebSocket auth
       setHostToken(roomCode, hostToken);
+      setHostGameLength(roomCode, gameLength);
       navigate(`/host/${roomCode}`);
     } catch (err) {
       setError("Failed to create room");
@@ -102,6 +111,25 @@ export default function Lobby() {
         </form>
 
         <div className="border-t border-gray-700 pt-6">
+          <label className="block text-gray-300 mb-2">Game Length</label>
+          <div className="grid grid-cols-2 gap-2 mb-4">
+            {GAME_LENGTH_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                aria-pressed={gameLength === option.value}
+                onClick={() => setGameLength(option.value)}
+                className={`px-3 py-2 rounded border-2 text-left transition-colors cursor-pointer ${
+                  gameLength === option.value
+                    ? "border-green-500 bg-green-900/30"
+                    : "border-gray-600 bg-gray-700 hover:border-gray-500"
+                }`}
+              >
+                <span className="block text-white font-semibold">{option.label}</span>
+                <span className="block text-gray-400 text-xs">{option.description}</span>
+              </button>
+            ))}
+          </div>
           <button
             onClick={handleCreate}
             disabled={isCreating}

@@ -2,12 +2,14 @@ import RoomCode from "../shared/RoomCode";
 import ConnectionBadge from "../shared/ConnectionBadge";
 import Timer from "../shared/Timer";
 import SoundToggle from "../shared/SoundToggle";
+import RoundProgress from "../shared/RoundProgress";
 
 interface HostLayoutProps {
   roomCode: string;
   isConnected: boolean;
   phase: string;
   timer: number | null;
+  roundProgress?: { current: number; total: number };
   children: React.ReactNode;
 }
 
@@ -15,15 +17,19 @@ export default function HostLayout({
   roomCode,
   isConnected,
   timer,
-  children
+  roundProgress,
+  children,
 }: HostLayoutProps) {
   return (
     <div className="min-h-screen bg-gray-900 p-8 relative">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
-          <RoomCode code={roomCode} size="lg" />
-          {timer && <Timer seconds={timer} size="lg" />}
+          <div className="flex flex-col">
+            <RoomCode code={roomCode} size="lg" />
+            {roundProgress && <RoundProgress {...roundProgress} size="lg" />}
+          </div>
+          {timer ? <Timer seconds={timer} size="lg" /> : <></>}
           <div className="flex items-center gap-2">
             <SoundToggle />
             <ConnectionBadge isConnected={isConnected} />

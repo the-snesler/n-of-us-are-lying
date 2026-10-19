@@ -213,7 +213,7 @@ The "host" is a desktop browser displaying on a TV. It displays global game info
     - Player clients display first 3 articles with option to “reroll” to display second 3. Players select one article each.
     - Players get 3 minutes (configurable) to read up on their topic and submit a single-sentence summary.
     - This happens three times, so each player has read 3 articles and has written 3 summaries in a total of 9 minutes (can happen in parallel, so Player 1 could summarize all three articles while Player 2 is still reading the first article)
-- Guessing rounds (happens 1-3 times per player. after everyone has gone once, players with lower scores are more likely to get selected for additional truth rounds)
+- Guessing rounds (happens 1-2 times per player in a short game or 2-3 times in a long one, chosen when creating the room. after everyone has gone once, players with lower scores are more likely to get selected for additional truth rounds)
     - 1 player’s article is selected, all other players get the article title and have 1 minute to submit their single-sentence summary.
         - During this time, the player whose article was selected gets a chance to refresh their memory on their topic
     - All players’ summaries are displayed on screen. Each player gets 2 minutes to justify/expand their summary verbally

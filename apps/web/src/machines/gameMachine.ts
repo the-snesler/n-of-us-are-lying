@@ -11,6 +11,21 @@ const ARTICLE_QUEUE_SIZE = ARTICLES_PER_PAGE * 2;
 const POINTS_FOR_FOOLING = 700;
 const POINTS_FOR_CORRECT_VOTE = 500;
 
+// Chosen when creating the room. Players research one article per round they could get,
+// so a short game also means less reading.
+export type GameLength = "short" | "long";
+export const DEFAULT_GAME_LENGTH: GameLength = "short";
+export const GAME_LENGTH_CONFIG: Record<
+  GameLength,
+  Pick<
+    RoomConfig,
+    "articlesPerPlayer" | "minRoundsPerPlayer" | "researchTimeSeconds"
+  >
+> = {
+  short: { articlesPerPlayer: 2, minRoundsPerPlayer: 1, researchTimeSeconds: 240 },
+  long: { articlesPerPlayer: 3, minRoundsPerPlayer: 2, researchTimeSeconds: 360 },
+};
+
 // Sometimes the expert's fake "ready" fires on a timer instead of after half the others submit
 const EARLY_EXPERT_CHANCE = 0.2;
 const EARLY_EXPERT_MIN_SECONDS = 10;
@@ -77,6 +92,7 @@ export const gameMachine = setup({
   types: {
     context: {} as GameContext,
     events: {} as GameEvent,
+    input: {} as { gameLength?: GameLength },
   },
   actors: {
     fetchArticles: fromPromise(
@@ -175,7 +191,8 @@ export const gameMachine = setup({
         (playerId) =>
           (context.selectedArticles[playerId] || []).length <
             context.config.articlesPerPlayer &&
-          (context.articleOptions[playerId]?.length ?? 0) < ARTICLE_QUEUE_SIZE &&
+          (context.articleOptions[playerId]?.length ?? 0) <
+            ARTICLE_QUEUE_SIZE &&
           !context.articleFetchStatus[playerId],
       );
 
@@ -433,7 +450,12 @@ export const gameMachine = setup({
             (a) => a.summary,
           );
           for (let i = 0; i < articles.length; i++) {
-            if (i !== 0 && Math.random() > (context.config.playerAdditionalArticleChance || 0)) break
+            if (
+              i >= context.config.minRoundsPerPlayer &&
+              Math.random() >
+                (context.config.playerAdditionalArticleChance || 0)
+            )
+              break;
             const article = articles[i];
             rounds.push({
               targetPlayerId: playerId,
@@ -521,7 +543,7 @@ export const gameMachine = setup({
     }),
 
     setRevealTimer: assign({
-      timer: () => 60, // 30 seconds for reveal, the VIP can skip ahead
+      timer: () => 60,
     }),
 
     tickTimer: assign({
@@ -561,8 +583,7 @@ export const gameMachine = setup({
     allRoundsComplete: ({ context }) =>
       context.currentRoundIndex >= context.rounds.length - 1,
 
-    noCurrentRound: ({ context }) =>
-      !context.rounds[context.currentRoundIndex],
+    noCurrentRound: ({ context }) => !context.rounds[context.currentRoundIndex],
 
     canReroll: ({ context, event }) => {
       if (event.type !== "REROLL_ARTICLES") return false;
@@ -652,18 +673,18 @@ export const gameMachine = setup({
 }).createMachine({
   id: "game",
   initial: "lobby",
-  context: {
+  context: ({ input }) => ({
     roomCode: "",
     players: {},
     config: {
       maxPlayers: 8,
-      articlesPerPlayer: 3,
       articleSelectionTimeSeconds: 60,
-      researchTimeSeconds: 360, // Total time for all articles, players go at their own pace
+      // Research time is the total for all articles, players go at their own pace
+      ...GAME_LENGTH_CONFIG[input.gameLength ?? DEFAULT_GAME_LENGTH],
       lieTimeSeconds: 30,
       presentationTimeSeconds: 600,
       voteTimeSeconds: 30,
-      everyoneLiesChance: 0.10,
+      everyoneLiesChance: 0.1,
       playerAdditionalArticleChance: 0.5,
     },
     timer: null,
@@ -676,14 +697,14 @@ export const gameMachine = setup({
     systemArticles: [],
     expertReady: false,
     expertReadyTimer: null,
-  },
+  }),
   on: {
     PLAYER_CONNECTED: {
       actions: "addPlayer",
     },
     PLAYER_DISCONNECTED: {
       actions: "disconnectPlayer",
-    }
+    },
   },
   states: {
     lobby: {

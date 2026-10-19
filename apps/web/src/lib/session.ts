@@ -3,6 +3,8 @@
  * the page (e.g. to read a Wikipedia article) and rejoin with the same identity.
  */
 
+import type { GameLength } from "../machines/gameMachine";
+
 export interface PlayerSession {
   name: string;
   playerId?: string;
@@ -11,6 +13,8 @@ export interface PlayerSession {
 
 const playerKey = (roomCode: string) => `nofus_player_${roomCode.toUpperCase()}`;
 const hostKey = (roomCode: string) => `nofus_host_${roomCode.toUpperCase()}`;
+const hostGameLengthKey = (roomCode: string) =>
+  `nofus_host_length_${roomCode.toUpperCase()}`;
 const LAST_ROOM_KEY = "nofus_last_room";
 const draftKey = (roomCode: string, articleId: string) =>
   `nofus_draft_${roomCode.toUpperCase()}_${articleId}`;
@@ -62,6 +66,15 @@ export function getHostToken(roomCode: string): string | null {
 
 export function setHostToken(roomCode: string, token: string): void {
   localStorage.setItem(hostKey(roomCode), token);
+}
+
+export function getHostGameLength(roomCode: string): GameLength | null {
+  const value = localStorage.getItem(hostGameLengthKey(roomCode));
+  return value === "short" || value === "long" ? value : null;
+}
+
+export function setHostGameLength(roomCode: string, length: GameLength): void {
+  localStorage.setItem(hostGameLengthKey(roomCode), length);
 }
 
 export function getDraft(roomCode: string, articleId: string): string {

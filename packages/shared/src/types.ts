@@ -54,14 +54,15 @@ export type Round = z.infer<typeof RoundSchema>;
 // Room configuration
 export const RoomConfigSchema = z.object({
   maxPlayers: z.number().min(3).max(8).default(8),
-  articlesPerPlayer: z.number().default(3),
+  articlesPerPlayer: z.number().default(3), // Also the most rounds a player can be the expert
+  minRoundsPerPlayer: z.number().default(1),
   articleSelectionTimeSeconds: z.number().default(60),
   researchTimeSeconds: z.number().default(360), // Total for all articles, self-paced
   lieTimeSeconds: z.number().default(30),
   presentationTimeSeconds: z.number().default(600),
   voteTimeSeconds: z.number().default(30),
   everyoneLiesChance: z.number().min(0).max(1).default(0.10),
-  playerAdditionalArticleChance: z.number().min(0).max(1).default(0.5),
+  playerAdditionalArticleChance: z.number().min(0).max(1).default(0.5), // Chance of each round beyond the minimum
 });
 
 export type RoomConfig = z.infer<typeof RoomConfigSchema>;
@@ -122,6 +123,12 @@ export const PlayerViewStateSchema = z.object({
   researchProgress: z
     .object({
       completed: z.number(), // Summaries submitted
+      total: z.number(),
+    })
+    .optional(),
+  roundProgress: z
+    .object({
+      current: z.number(), // 1-based
       total: z.number(),
     })
     .optional(),

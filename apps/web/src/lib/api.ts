@@ -49,8 +49,24 @@ export function getWebSocketUrl(
   return `${protocol}//${host}${API_BASE}/rooms/${roomCode}/ws?${queryString}`;
 }
 
+type GameSnapshot = ReturnType<typeof useMachine<typeof gameMachine>>[0];
+
+/** Which guessing round we're on, once the rounds have been dealt */
+export function getRoundProgress(
+  state: GameSnapshot,
+): { current: number; total: number } | undefined {
+  const isRoundPhase =
+    state.matches("guessing") ||
+    state.matches("presenting") ||
+    state.matches("voting") ||
+    state.matches("reveal");
+  const { rounds, currentRoundIndex } = state.context;
+  if (!isRoundPhase || !rounds[currentRoundIndex]) return undefined;
+  return { current: currentRoundIndex + 1, total: rounds.length };
+}
+
 export function machineStateToPlayerViewState(
-  state: ReturnType<typeof useMachine<typeof gameMachine>>[0],
+  state: GameSnapshot,
   playerId: string,
 ): PlayerViewState {
   // guessing, presenting, voting, reveal
@@ -123,6 +139,7 @@ export function machineStateToPlayerViewState(
       isExpert,
       mySubmission,
       answers,
+      roundProgress: getRoundProgress(state),
       hasSubmittedLie,
       hasVoted,
       markedTrue: isExpert ? currentRound.markedTrue : undefined,
