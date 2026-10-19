@@ -1,9 +1,10 @@
 interface RevealPhaseProps {
   isVIP: boolean;
+  timer?: number | null;
   onContinue?: () => void;
 }
 
-export default function RevealPhase({ isVIP, onContinue }: RevealPhaseProps) {
+export default function RevealPhase({ isVIP, timer, onContinue }: RevealPhaseProps) {
   return (
     <div className="flex flex-col gap-6 text-center">
       <div className="bg-gray-800 border border-gray-700 rounded-xl p-8">
@@ -37,7 +38,7 @@ export default function RevealPhase({ isVIP, onContinue }: RevealPhaseProps) {
           onClick={onContinue}
           className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-colors text-lg"
         >
-          Next Round
+          Skip ▸{timer ? ` (${timer}s)` : ""}
         </button>
       )}
     </div>

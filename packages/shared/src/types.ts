@@ -57,7 +57,7 @@ export const RoomConfigSchema = z.object({
   articlesPerPlayer: z.number().default(3),
   articleSelectionTimeSeconds: z.number().default(60),
   researchTimeSeconds: z.number().default(360), // Total for all articles, self-paced
-  lieTimeSeconds: z.number().default(60),
+  lieTimeSeconds: z.number().default(30),
   presentationTimeSeconds: z.number().default(600),
   voteTimeSeconds: z.number().default(30),
   everyoneLiesChance: z.number().min(0).max(1).default(0.10),

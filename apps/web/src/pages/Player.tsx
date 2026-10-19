@@ -255,6 +255,7 @@ export default function Player() {
           {gameState.phase === "REVEAL" && (
             <RevealPhase
               isVIP={gameState.players[gameState.playerId]?.isVip || false}
+              timer={gameState.timer}
               onContinue={handleContinue}
             />
           )}

@@ -1,4 +1,5 @@
 import type { Player, Round } from "@nofus/shared";
+import AnswerText from "../../shared/AnswerText";
 
 interface RevealPhaseProps {
   players: Record<string, Player>;
@@ -70,7 +71,9 @@ export default function RevealPhase({
                       </span>
                     )}
                   </span>
-                  <p className="text-xl italic font-medium">"{text}"</p>
+                  <p className="text-xl italic font-medium">
+                    <AnswerText text={text} />
+                  </p>
                 </div>
               </div>
 

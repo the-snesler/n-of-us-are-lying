@@ -1,4 +1,5 @@
 import type { Article } from "@nofus/shared";
+import AnswerText from "../../shared/AnswerText";
 
 interface PresentingPhaseProps {
   isExpert: boolean;
@@ -32,7 +33,7 @@ export default function PresentingPhase({
           Your Summary:
         </p>
         <p className="text-xl italic text-white leading-relaxed">
-          "{mySubmission || currentArticle?.summary}"
+          <AnswerText text={mySubmission || currentArticle?.summary} />
         </p>
       </div>
 

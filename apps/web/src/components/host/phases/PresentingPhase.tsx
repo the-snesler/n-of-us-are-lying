@@ -1,4 +1,5 @@
 import type { Player, Round } from "@nofus/shared";
+import AnswerText from "../../shared/AnswerText";
 
 interface PresentingPhaseProps {
   players: Record<string, Player>;
@@ -45,7 +46,7 @@ export default function PresentingPhase({
                 </span>
               </div>
               <p className="text-xl font-medium leading-relaxed italic">
-                "{text}"
+                <AnswerText text={text} />
               </p>
             </div>
           );

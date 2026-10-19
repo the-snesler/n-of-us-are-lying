@@ -22,6 +22,11 @@ export default function VotingPhase({
   onVote,
   onMarkTrue,
 }: VotingPhaseProps) {
+  // Players who didn't submit are shown on the TV, but there's nothing to vote for
+  const votable = answers.filter(
+    (answer) => answer.text && answer.id !== playerId,
+  );
+
   if (hasVoted) {
     return (
       <SubmissionConfirm
@@ -45,8 +50,7 @@ export default function VotingPhase({
         </div>
 
         <div className="flex flex-col gap-3">
-          {answers.map((answer) => {
-            if (answer.id === playerId) return null; // Don't mark yourself
+          {votable.map((answer) => {
 
             const isMarked = markedTrue.includes(answer.id);
             const writer = players[answer.id];
@@ -94,28 +98,32 @@ export default function VotingPhase({
         <p className="text-gray-400 text-sm">Pick carefully...</p>
       </div>
 
+      {votable.length === 0 && (
+        <p className="text-center text-gray-400">
+          Nobody submitted an answer this round.
+        </p>
+      )}
+
       <div className="flex flex-col gap-3">
-        {answers
-          .filter((answer) => answer.id !== playerId)
-          .map((answer) => {
-            const writer = players[answer.id];
-            return (
-              <button
-                key={answer.id}
-                onClick={() => onVote(answer.id)}
-                className="p-5 rounded-xl bg-gray-800 border-2 border-gray-700 hover:border-blue-500 hover:bg-gray-750 transition-all text-left group flex flex-col gap-2"
-              >
-                <div className="flex justify-between items-start w-full">
-                  <p className="text-white text-lg font-medium leading-snug group-hover:text-blue-200 transition-colors italic">
-                    "{answer.text}"
-                  </p>
-                  <span className="text-[10px] font-bold text-gray-500 uppercase ml-2 shrink-0 group-hover:text-gray-400">
-                    {writer?.name || "System"}
-                  </span>
-                </div>
-              </button>
-            );
-          })}
+        {votable.map((answer) => {
+          const writer = players[answer.id];
+          return (
+            <button
+              key={answer.id}
+              onClick={() => onVote(answer.id)}
+              className="p-5 rounded-xl bg-gray-800 border-2 border-gray-700 hover:border-blue-500 hover:bg-gray-750 transition-all text-left group flex flex-col gap-2"
+            >
+              <div className="flex justify-between items-start w-full">
+                <p className="text-white text-lg font-medium leading-snug group-hover:text-blue-200 transition-colors italic">
+                  "{answer.text}"
+                </p>
+                <span className="text-[10px] font-bold text-gray-500 uppercase ml-2 shrink-0 group-hover:text-gray-400">
+                  {writer?.name || "System"}
+                </span>
+              </div>
+            </button>
+          );
+        })}
       </div>
     </div>
   );

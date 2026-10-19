@@ -300,7 +300,14 @@ export const gameMachine = setup({
         const currentRound = context.rounds[context.currentRoundIndex];
         if (!currentRound) return context.rounds;
 
-        const answerIds = [...Object.keys(currentRound.lies)];
+        // Include connected players who didn't submit, shown as "[no response]"
+        const answerIds = Object.values(context.players)
+          .filter(
+            (p) =>
+              p.id !== currentRound.targetPlayerId &&
+              (p.isConnected || currentRound.lies[p.id] !== undefined),
+          )
+          .map((p) => p.id);
         if (!currentRound.isEveryoneLies) {
           answerIds.push(currentRound.targetPlayerId);
         }
@@ -499,7 +506,7 @@ export const gameMachine = setup({
     }),
 
     setRevealTimer: assign({
-      timer: () => 15, // 15 seconds for reveal
+      timer: () => 30, // 30 seconds for reveal, the VIP can skip ahead
     }),
 
     tickTimer: assign({
@@ -638,7 +645,7 @@ export const gameMachine = setup({
       articlesPerPlayer: 3,
       articleSelectionTimeSeconds: 60,
       researchTimeSeconds: 360, // Total time for all articles, players go at their own pace
-      lieTimeSeconds: 60,
+      lieTimeSeconds: 30,
       presentationTimeSeconds: 600,
       voteTimeSeconds: 30,
       everyoneLiesChance: 0.10,
