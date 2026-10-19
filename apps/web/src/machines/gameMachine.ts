@@ -11,6 +11,21 @@ const ARTICLE_QUEUE_SIZE = ARTICLES_PER_PAGE * 2;
 const POINTS_FOR_FOOLING = 700;
 const POINTS_FOR_CORRECT_VOTE = 500;
 
+// Sometimes the expert's fake "ready" fires on a timer instead of after half the others submit
+const EARLY_EXPERT_CHANCE = 0.2;
+const EARLY_EXPERT_MIN_SECONDS = 10;
+const EARLY_EXPERT_MAX_SECONDS = 20;
+
+function rollExpertReadyTimer(): number | null {
+  if (Math.random() >= EARLY_EXPERT_CHANCE) return null;
+  return (
+    EARLY_EXPERT_MIN_SECONDS +
+    Math.floor(
+      Math.random() * (EARLY_EXPERT_MAX_SECONDS - EARLY_EXPERT_MIN_SECONDS + 1),
+    )
+  );
+}
+
 // Context type for the game state machine
 interface GameContext {
   roomCode: string;
@@ -473,7 +488,7 @@ export const gameMachine = setup({
         // If it's "everyone lies", there is no expert to wait for
         return currentRound?.isEveryoneLies || false;
       },
-      expertReadyTimer: () => null,
+      expertReadyTimer: () => rollExpertReadyTimer(),
     }),
 
     setupVoting: assign({
@@ -481,7 +496,7 @@ export const gameMachine = setup({
         const currentRound = context.rounds[context.currentRoundIndex];
         return currentRound?.isEveryoneLies || false;
       },
-      expertReadyTimer: () => null,
+      expertReadyTimer: () => rollExpertReadyTimer(),
       timer: ({ context }) => context.config.voteTimeSeconds,
     }),
 
@@ -506,7 +521,7 @@ export const gameMachine = setup({
     }),
 
     setRevealTimer: assign({
-      timer: () => 30, // 30 seconds for reveal, the VIP can skip ahead
+      timer: () => 60, // 30 seconds for reveal, the VIP can skip ahead
     }),
 
     tickTimer: assign({
