@@ -1,8 +1,17 @@
-# Stage 1: Install dependencies
-FROM oven/bun:latest AS deps
+# Pin bun so a new release can't silently break the build/runtime
+ARG BUN_VERSION=1.3
 
-# Install pnpm using bun
-RUN bun install -g pnpm
+FROM oven/bun:${BUN_VERSION} AS bun
+
+# Stage 1: Install dependencies
+# pnpm needs a real Node.js (bun's `node` shim is not a drop-in replacement)
+FROM node:22-slim AS deps
+
+# bun is still needed to build the server
+COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
+
+# Install the pnpm version pinned in package.json's packageManager field
+RUN corepack enable
 
 WORKDIR /app
 
@@ -51,7 +60,7 @@ COPY apps/server apps/server
 RUN pnpm --filter @nofus/server build
 
 # Stage 5: Production runtime
-FROM oven/bun:slim AS runtime
+FROM oven/bun:${BUN_VERSION}-slim AS runtime
 
 WORKDIR /app
 
